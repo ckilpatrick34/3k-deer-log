@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>3K Deer Log</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bitter:wght@600;700&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: field-notebook tool. Summary of each buck up top, charts in a two-column grid, log + entry form below. */
+:root{
+  --bg:#f3f1ea; --panel:#fbfaf6; --ink:#24271f; --muted:#646a5a; --line:#d9d6c8;
+  --accent:#b5651d; --accent-soft:#ecd9c3; --moss:#4f6b3a; --moss-soft:#d7e0cc; --danger:#a33a2a;
+  --display:"Bitter",Georgia,serif; --body:"Source Sans 3",system-ui,sans-serif; --mono:"JetBrains Mono",ui-monospace,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#181a15; --panel:#21241d; --ink:#e7e5da; --muted:#a3a894; --line:#363a2f;
+  --accent:#e08a3c; --accent-soft:#4a3520; --moss:#9cbf7f; --moss-soft:#2f3b26; --danger:#e0705d; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#181a15; --panel:#21241d; --ink:#e7e5da; --muted:#a3a894; --line:#363a2f;
+  --accent:#e08a3c; --accent-soft:#4a3520; --moss:#9cbf7f; --moss-soft:#2f3b26; --danger:#e0705d; color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5}
+.wrap{max-width:1100px;margin:0 auto;padding-block:24px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:24px}
+h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance}
+h1{font-size:30px}
+h2{font-size:19px}
+h3{font-size:16px}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+header{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:end;justify-content:space-between}
+header p{margin:4px 0 0;color:var(--muted);max-width:60ch}
+.controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+select,input,textarea,button{font:inherit;color:var(--ink)}
+select,input,textarea{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:7px 9px;min-width:0}
+button{cursor:pointer;border-radius:6px;border:1px solid var(--line);background:var(--panel);padding:7px 12px}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.banner{background:var(--accent-soft);border-radius:8px;padding:10px 14px;display:flex;gap:12px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+.banner[hidden]{display:none!important}
+.bucks{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.buck{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;gap:8px;cursor:pointer;text-align:left}
+.buck.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.buck .stats{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:13px}
+.buck .stats dt{color:var(--muted)} .buck .stats dd{margin:0;font-variant-numeric:tabular-nums}
+.pill{display:inline-block;font-family:var(--mono);font-size:11px;padding:1px 7px;border-radius:99px;background:var(--moss-soft);color:var(--moss)}
+.pill.hot{background:var(--accent-soft);color:var(--accent)}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+@media (max-width:760px){.grid{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;display:grid;gap:10px;min-width:0}
+.card.wide{grid-column:1/-1}
+.card p.note{margin:0;color:var(--muted);font-size:13px}
+svg text{fill:var(--muted);font-family:var(--mono);font-size:10px}
+svg .val{fill:var(--ink)}
+.hbar{display:grid;grid-template-columns:110px 1fr 34px;gap:8px;align-items:center;font-size:13px}
+.hbar .track{height:12px;background:var(--bg);border-radius:3px;overflow:hidden}
+.hbar .fill{height:100%;background:var(--moss)}
+.hbar .n{font-family:var(--mono);font-size:12px;text-align:right;font-variant-numeric:tabular-nums}
+.hbar .lab{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+form.entry{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+form.entry label{display:grid;gap:3px;font-size:12px;color:var(--muted)}
+form.entry .span2{grid-column:span 2}
+form.entry .full{grid-column:1/-1}
+@media (max-width:640px){form.entry{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:400}
+td.num{font-variant-numeric:tabular-nums}
+td button{padding:2px 8px;font-size:12px}
+.status{font-size:13px;color:var(--muted)}
+.empty{padding:24px;text-align:center;color:var(--muted)}
+details summary{cursor:pointer;font-weight:600}
+.thumb{width:72px;height:54px;object-fit:cover;border-radius:4px;display:block;cursor:zoom-in;background:var(--bg)}
+.buck .pic{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:6px;background:var(--bg);display:block}
+.lightbox{position:fixed;inset:0;background:rgba(10,12,8,.88);display:grid;place-items:center;z-index:20;padding:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));cursor:zoom-out}
+.lightbox img{max-width:100%;max-height:85vh;border-radius:6px}
+.lightbox p{color:#e7e5da;margin:8px 0 0;text-align:center;font-size:13px}
+</style>
+</head><body>
+
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow">3K property · trail camera patterning</div>
+      <h1>3K Deer Log</h1>
+      <p>Every deer on the 3K trail cameras, with each named buck's pattern and a planner for the best sit. <span id="gen"></span></p>
+    </div>
+    <div class="controls">
+      <label for="deerFilter" class="eyebrow">Showing</label>
+      <select id="deerFilter"><option value="">All deer</option></select>
+    </div>
+  </header>
+
+
+  <section class="card">
+    <div style="display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline;justify-content:space-between">
+      <h2>Hunt planner</h2>
+      <span class="note" style="color:var(--muted);font-size:13px">Enter the sit you're planning. Bucks are ranked by how often they've shown up under conditions like these.</span>
+    </div>
+    <form class="entry" id="plan" onsubmit="return false">
+      <label>Date<input id="p_date" type="date"></label>
+      <label>Sit
+        <select id="p_win"></select>
+      </label>
+      <label>Wind from
+        <select id="p_wind"><option value="">Any</option><option>N</option><option>NE</option><option>E</option><option>SE</option><option>S</option><option>SW</option><option>W</option><option>NW</option></select>
+      </label>
+      <label>Temp °F<input id="p_temp" type="number" inputmode="numeric" placeholder="Any"></label>
+    </form>
+    <p class="note" id="planNote"></p>
+    <div id="planStands" class="bucks" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))"></div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Buck</th><th>Est. score</th><th>Odds he's on camera this sit</th><th>Best stand</th><th>Why</th></tr></thead>
+      <tbody id="planRows"></tbody>
+    </table></div>
+    <p class="note">Odds are rough. Each buck's sighting rate is scaled up or down by how much more or less often he's been seen in that time window, wind, temperature and moon phase than deer overall. Wind and temperature are one regional reading, not one per stand, so check your own stand's wind before you go. These get sharper as more days are logged.</p>
+  </section>
+
+  <section>
+    <div class="eyebrow" style="margin-bottom:8px">Named deer · tap one to filter</div>
+    <div class="bucks" id="bucks"><div class="empty">Named deer show up here after you log a sighting with a name, like "Split G2" or "Big 8".</div></div>
+  </section>
+
+  <section class="grid">
+    <div class="card wide">
+      <h2>Time of day</h2>
+      <p class="note" id="hourNote">Sightings by the hour the photo was taken.</p>
+      <div id="hourChart"></div>
+    </div>
+    <div class="card"><h2>By camera</h2><div id="camChart"></div></div>
+    <div class="card"><h2>Moon phase</h2><p class="note">Worked out from each photo's date.</p><div id="moonChart"></div></div>
+    <div class="card"><h2>Wind direction</h2><p class="note">Copy it from the Reveal photo details or your wind sensor.</p><div id="windChart"></div></div>
+    <div class="card"><h2>Temperature</h2><p class="note">From the temperature on the photo strip.</p><div id="tempChart"></div></div>
+  </section>
+
+
+  <section class="card">
+    <h2>All sightings</h2>
+    <div class="tablewrap"><table>
+      <thead><tr><th>When</th><th>Camera</th><th>Deer</th><th>Name</th><th>Moon</th><th>Wind</th><th>°F</th><th>Notes</th><th></th></tr></thead>
+      <tbody id="rows"><tr><td colspan="9" class="empty" id="loadMsg">Loading your sightings…</td></tr></tbody>
+    </table></div>
+  </section>
+</div>
+
+<script>
+let db=null, col=null, all=[], filter="", profiles={};
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+// Moon phase from date (synodic month, reference new moon 2000-01-06 18:14 UTC)
+function moonAge(d){const P=29.530588853, ref=Date.UTC(2000,0,6,18,14);let a=((d-ref)/864e5)%P;return a<0?a+P:a}
+function moonPhase(d){const a=moonAge(d);
+  if(a<1.85||a>=27.68)return"New";if(a<5.54)return"Waxing crescent";if(a<9.23)return"First quarter";if(a<12.92)return"Waxing gibbous";
+  if(a<16.61)return"Full";if(a<20.30)return"Waning gibbous";if(a<23.99)return"Last quarter";return"Waning crescent"}
+const MOONS=["New","Waxing crescent","First quarter","Waxing gibbous","Full","Waning gibbous","Last quarter","Waning crescent"];
+const WINDS=["N","NE","E","SE","S","SW","W","NW"];
+const parseWhen=s=>new Date(String(s).replace(" ","T"));
+const fmtHour=h=>h===0?"12a":h<12?h+"a":h===12?"12p":(h-12)+"p";
+const fmtWhen=d=>d.toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
+
+// ---- Patterning: best conditions + planner ----
+const WINS=[["Dawn (5–10am)",5,10],["Midday (10am–3pm)",10,15],["Dusk (3–8pm)",15,20],["Night (8pm–5am)",20,29]];
+const winOf=h=>h>=5&&h<10?0:h>=10&&h<15?1:h>=15&&h<20?2:3;
+const TBANDS=["Under 20°","20s","30s","40s","50s","60° and up"];
+const tband=t=>t==null||t===""||isNaN(+t)?null:+t<20?TBANDS[0]:+t<30?TBANDS[1]:+t<40?TBANDS[2]:+t<50?TBANDS[3]:+t<60?TBANDS[4]:TBANDS[5];
+const MOON4=["New moon","First quarter","Full moon","Last quarter"];
+const moon4=d=>MOON4[Math.round(moonAge(d)/29.530588853*4)%4];
+const FACTORS=[
+  {key:"win",label:"Time",cats:WINS.map(w=>w[0]),get:r=>WINS[winOf(r._d.getHours())][0]},
+  {key:"wind",label:"Wind",cats:WINDS,get:r=>r.wind||null,fmt:v=>v+" wind"},
+  {key:"temp",label:"Temp",cats:TBANDS,get:r=>tband(r.temp)},
+  {key:"moon",label:"Moon",cats:MOON4,get:r=>moon4(r._d)}];
+function dist(rows,f){const m={};let n=0;rows.forEach(r=>{const v=f.get(r);if(v==null)return;m[v]=(m[v]||0)+1;n++});return{m,n}}
+// smoothed share of this deer's sightings in a bin vs. share of all deer sightings in that bin
+// returns 1 (no effect) when there isn't enough data for that bin, and caps the effect at 4x either way
+function lift(bd,ad,v,K){const a=ad.m[v]||0;if(a<8||bd.n<3)return 1;const L=((bd.m[v]||0)+.5)/(bd.n+.5*K)/((a+.5)/(ad.n+.5*K));return Math.min(4,Math.max(.25,L))}
+function bestConditions(rs){
+  const out=[];FACTORS.forEach(f=>{const bd=dist(rs,f),ad=dist(all,f);if(bd.n<2)return;
+    let best=null;f.cats.forEach(v=>{const c=bd.m[v]||0;if(c<2&&!(bd.n<6&&c>=1))return;const L=f.key==="win"?c:lift(bd,ad,v,f.cats.length)*(1+c/1e3);if(!best||L>best.L)best={v,L,c}});
+    if(best)out.push({f,...best})});
+  const cam=count(rs,r=>r.camera)[0];
+  return{list:out,cam:cam?cam[0]:null};
+}
+function planner(){
+  const days=new Set(all.map(r=>r._d.toDateString())).size||1;
+  const dIn=$("p_date").value,date=dIn?new Date(dIn+"T12:00"):new Date();
+  const wi=+$("p_win").value,wind=$("p_wind").value,temp=$("p_temp").value;
+  const cond={win:WINS[wi][0],wind:wind||null,temp:temp===""?null:tband(temp),moon:moon4(date)};
+  const named=new Map();all.forEach(r=>{if(r.name&&r.kind==="Buck"){(named.get(r.name)||named.set(r.name,[]).get(r.name)).push(r)}});
+  const res=[];
+  named.forEach((rs,name)=>{
+    const base=rs.length/days;let lam=base;const why=[];
+    FACTORS.forEach(f=>{const v=cond[f.key];if(v==null)return;const bd=dist(rs,f),ad=dist(all,f);if(!bd.n)return;
+      if(f.key==="win"){const p=((bd.m[v]||0)+.5)/(bd.n+.5*f.cats.length);lam*=p;why.push([`${Math.round(p*100)}% of his visits are ${v.split(" ")[0].toLowerCase()}`,p*4])}
+      else{const L=lift(bd,ad,v,f.cats.length);lam*=L;if(Math.abs(L-1)>=.15)why.push([`${L>=1?"likes":"less often in"} ${f.fmt?f.fmt(v):v} (${L.toFixed(1)}×)`,L])}});
+    const inWin=rs.filter(r=>winOf(r._d.getHours())===wi);
+    const stand=(count(inWin.length?inWin:rs,r=>r.camera)[0]||[null])[0];
+    const prob=1-Math.exp(-lam);
+    res.push({name,prof:profiles[name]||{},prob,lam,stand,why:why.sort((a,b)=>Math.abs(Math.log(b[1]))-Math.abs(Math.log(a[1]))).slice(0,2).map(w=>w[0]),n:rs.length,inWin:inWin.length});
+  });
+  res.sort((a,b)=>b.prob-a.prob);
+  $("planNote").textContent=`${cond.moon} on ${date.toLocaleDateString(undefined,{month:"short",day:"numeric"})}. Based on ${all.length} sightings over ${days} days.`;
+  const pct=p=>p>=.995?"99%+":p<.01?"<1%":Math.round(p*100)+"%";
+  $("planRows").innerHTML=res.length?res.map(r=>`<tr><td><b>${esc(r.name)}</b></td><td class="num">${r.prof.score_high?`${esc(r.prof.score_low)}–${esc(r.prof.score_high)}″`:"—"}</td><td class="num"><span class="pill${r.prob>=.25?" hot":""}">${pct(r.prob)}</span></td><td>${esc(r.stand||"—")}${r.inWin?"":` <span style="color:var(--muted)">(never seen this window)</span>`}</td><td style="white-space:normal;min-width:220px">${r.why.map(esc).join("; ")}</td></tr>`).join(""):'<tr><td colspan="5" class="empty">Name some bucks first.</td></tr>';
+  // stands: sum of each buck's odds at the stand he uses in this window, weighted toward bigger bucks
+  const st=new Map();res.forEach(r=>{if(!r.stand||!r.inWin)return;const s=st.get(r.stand)||{w:0,b:[]};s.w+=r.lam*((r.prof.score_high||100)/100);s.b.push(r);st.set(r.stand,s)});
+  $("planStands").innerHTML=[...st.entries()].sort((a,b)=>b[1].w-a[1].w).slice(0,3).map(([cam,s],i)=>`<div class="buck" style="cursor:default"><div class="eyebrow">${i===0?"Best stand":"Next best"}</div><h3>${esc(cam)}</h3><p class="note" style="margin:0;font-size:13px;color:var(--muted)">${s.b.sort((a,b)=>b.prob-a.prob).slice(0,3).map(b=>`${esc(b.name)} ${pct(b.prob)}`).join(" · ")}</p></div>`).join("");
+}
+
+function view(){if(!filter)return all;if(filter==="@Doe")return all.filter(r=>r.kind==="Doe");if(filter==="@Fawn")return all.filter(r=>r.kind==="Fawn");if(filter==="@Buck")return all.filter(r=>r.kind==="Buck");if(filter==="@Unnamed")return all.filter(r=>r.kind==="Buck"&&!r.name);return all.filter(r=>(r.name||"")===filter)}
+
+function hbars(el,entries){
+  const max=Math.max(1,...entries.map(e=>e[1]));
+  el.innerHTML=entries.length?entries.map(([k,n])=>`<div class="hbar"><span class="lab" title="${esc(k)}">${esc(k)}</span><div class="track"><div class="fill" style="width:${n/max*100}%"></div></div><span class="n">${n}</span></div>`).join(""):'<div class="empty">No data yet</div>';
+}
+function count(rows,fn,order){const m=new Map();rows.forEach(r=>{const k=fn(r);if(k==null||k==="")return;m.set(k,(m.get(k)||0)+1)});
+  let e=[...m.entries()];if(order)e=order.filter(k=>m.has(k)).map(k=>[k,m.get(k)]);else e.sort((a,b)=>b[1]-a[1]);return e}
+
+function hourChart(rows){
+  const c=new Array(24).fill(0);rows.forEach(r=>c[r._d.getHours()]++);
+  const max=Math.max(1,...c),W=720,H=150,pl=24,pb=20,bw=(W-pl)/24;
+  let s=`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Sightings by hour">`;
+  // daylight band (approx. 6am to 6pm)
+  s+=`<rect x="${pl+6*bw}" y="0" width="${12*bw}" height="${H-pb}" fill="var(--accent-soft)" opacity=".45"></rect>`;
+  [0,.5,1].forEach(f=>{const y=(H-pb)-(H-pb-14)*f;s+=`<line x1="${pl}" x2="${W}" y1="${y}" y2="${y}" stroke="var(--line)"></line><text x="${pl-4}" y="${y+3}" text-anchor="end">${Math.round(max*f)}</text>`});
+  c.forEach((n,h)=>{const bh=(H-pb-14)*n/max,x=pl+h*bw+2;s+=`<rect x="${x}" y="${H-pb-bh}" width="${bw-4}" height="${bh}" rx="2" fill="var(--moss)"><title>${fmtHour(h)}: ${n}</title></rect>`;
+    if(h%3===0)s+=`<text x="${x+(bw-4)/2}" y="${H-6}" text-anchor="middle">${fmtHour(h)}</text>`});
+  $("hourChart").innerHTML=s+"</svg>";
+  const day=rows.filter(r=>{const h=r._d.getHours();return h>=6&&h<18}).length;
+  const peak=c.indexOf(Math.max(...c));
+  $("hourNote").textContent=rows.length?`${Math.round(day/rows.length*100)}% of these sightings fall between 6am and 6pm (shaded). Busiest hour: ${fmtHour(peak)}.`:"Sightings by the hour the photo was taken.";
+}
+
+function bucks(){
+  const named=new Map();all.forEach(r=>{if(r.name){(named.get(r.name)||named.set(r.name,[]).get(r.name)).push(r)}});
+  const el=$("bucks");
+  if(!named.size){el.innerHTML='<div class="empty">Named deer show up here after you log a sighting with a name, like "Split G2" or "Big 8".</div>';return}
+  const now=Date.now();
+  el.innerHTML=[...named.entries()].sort((a,b)=>((profiles[b[0]]||{}).score_high||0)-((profiles[a[0]]||{}).score_high||0)||b[1].length-a[1].length).map(([name,rs])=>{
+    const last=rs.reduce((a,r)=>r._d>a?r._d:a,new Date(0));
+    const cam=count(rs,r=>r.camera)[0]?.[0]||"—";
+    const day=rs.filter(r=>{const h=r._d.getHours();return h>=6&&h<18}).length;
+    const hrs=count(rs,r=>r._d.getHours())[0];
+    const recent=(now-last)/864e5<=7;
+    const prof=profiles[name]||{};
+    const bc=bestConditions(rs);
+    const bcText=[...bc.list.map(x=>x.f.fmt?x.f.fmt(x.v):x.v),bc.cam].filter(Boolean).join(" · ");
+    const best=prof.photo?{photo:prof.photo,_d:prof.when?parseWhen(prof.when):last,camera:prof.camera||cam}:(rs.find(r=>r.photo&&/conf high/.test(r.notes||""))||rs.find(r=>r.photo&&/pts/.test(r.notes||""))||rs.find(r=>r.photo));
+    return `<button class="buck${filter===name?" sel":""}" data-name="${esc(name)}">
+      ${best?`<img class="pic" src="${esc(best.photo)}" loading="lazy" alt="${esc(name)}" data-cap="${esc(name+" · "+fmtWhen(best._d)+" · "+best.camera)}">`:""}
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><h3>${esc(name)}</h3><span class="pill${recent?" hot":""}">${recent?"seen this week":rs.length+" pics"}</span></div>
+      <dl class="stats">
+        ${prof.score_high?`<dt>Est. score</dt><dd><b>${esc(prof.score_low)}–${esc(prof.score_high)}″</b>${prof.score_conf?` <span style="color:var(--muted);font-size:12px">(${esc(prof.score_conf)})</span>`:""}</dd>`:""}
+        <dt>Sightings</dt><dd>${rs.length}</dd>
+        <dt>Last seen</dt><dd>${fmtWhen(last)}</dd>
+        <dt>Top camera</dt><dd>${esc(cam)}</dd>
+        <dt>Busiest hour</dt><dd>${hrs?fmtHour(hrs[0]):"—"}</dd>
+        <dt>Daylight</dt><dd>${Math.round(day/rs.length*100)}%</dd>
+      </dl>${bcText?`<div style="background:var(--moss-soft);color:var(--ink);border-radius:6px;padding:6px 8px;font-size:13px"><span class="eyebrow" style="color:var(--moss)">Best odds</span><br>${esc(bcText)}</div>`:""}${prof.description?`<p class="note" style="margin:0;font-size:13px;color:var(--muted)">${esc(prof.description)}${prof.confidence?` · match confidence ${esc(prof.confidence)}`:""}${prof.score_basis?`<br><span style="font-size:12px">Score basis: ${esc(prof.score_basis)}</span>`:""}</p>`:""}</button>`}).join("");
+  el.querySelectorAll(".buck").forEach(b=>b.onclick=()=>{filter=filter===b.dataset.name?"":b.dataset.name;$("deerFilter").value=filter;render()});
+}
+
+function render(){
+  const names=[...new Set(all.map(r=>r.name).filter(Boolean))].sort();
+  const sel=$("deerFilter");sel.innerHTML='<option value="">All deer</option>'+[["@Buck","All bucks"],["@Doe","Does (group)"],["@Fawn","Fawns (group)"],["@Unnamed","Unidentified bucks"]].map(([v,l])=>`<option value="${v}"${v===filter?" selected":""}>${l}</option>`).join("")+names.map(n=>`<option${n===filter?" selected":""}>${esc(n)}</option>`).join("");
+  
+  const rows=view();
+  bucks();hourChart(rows);planner();
+  hbars($("camChart"),count(rows,r=>r.camera));
+  hbars($("moonChart"),count(rows,r=>moonPhase(r._d),MOONS));
+  hbars($("windChart"),count(rows,r=>r.wind,WINDS));
+  const tb=t=>t==null||t===""?null:t<20?"Under 20°":t<30?"20s":t<40?"30s":t<50?"40s":t<60?"50s":"60° and up";
+  hbars($("tempChart"),count(rows,r=>tb(r.temp),["Under 20°","20s","30s","40s","50s","60° and up"]));
+  const tbody=$("rows");
+  tbody.innerHTML=rows.length?[...rows].sort((a,b)=>b._d-a._d).map(r=>`<tr><td class="num">${fmtWhen(r._d)}</td><td>${esc(r.camera)}</td><td>${esc(r.kind)}</td><td>${esc(r.name)}</td><td>${moonPhase(r._d)}</td><td>${esc(r.wind)}</td><td class="num">${r.temp??""}</td><td>${esc(r.notes)}</td><td></td></tr>`).join(""):'<tr><td colspan="9" class="empty">No sightings yet. Log your first one above.</td></tr>';
+  document.querySelectorAll("img.thumb,img.pic").forEach(im=>im.onclick=e=>{e.stopPropagation();openBox(im.src,im.dataset.cap||"")});
+  
+}
+function openBox(src,cap){const d=document.createElement("div");d.className="lightbox";d.setAttribute("role","dialog");
+  const im=document.createElement("img");im.src=src;im.alt=cap;const p=document.createElement("p");p.textContent=cap+" · tap to close";
+  const w=document.createElement("div");w.append(im,p);d.append(w);d.onclick=()=>d.remove();document.body.append(d);
+  const k=e=>{if(e.key==="Escape"){d.remove();removeEventListener("keydown",k)}};addEventListener("keydown",k)}
+function alertMsg(id,e){$(id).textContent=e?.code==="not_granted"||e?.code==="forbidden"?"You can view this log but not change it.":"Couldn't save. Try again in a moment."}
+
+function toRow(o){return{camera:String(o.camera||"").trim(),kind:o.kind||"Unknown",name:String(o.name||"").trim(),wind:o.wind||"",temp:o.temp===""||o.temp==null||isNaN(+o.temp)?null:+o.temp,notes:String(o.notes||"").trim(),when:o.when}}
+
+$("deerFilter").onchange=e=>{filter=e.target.value;render()};
+$("p_win").innerHTML=WINS.map((w,i)=>`<option value="${i}">${w[0]}</option>`).join("");
+{const h=new Date().getHours();$("p_win").value=h<10?0:h<15?1:2;const t=new Date();$("p_date").value=`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,"0")}-${String(t.getDate()).padStart(2,"0")}`}
+try{const s=JSON.parse(localStorage.getItem("plan")||"{}");["p_win","p_wind","p_temp"].forEach(k=>{if(s[k]!=null)$(k).value=s[k]})}catch{}
+["p_date","p_win","p_wind","p_temp"].forEach(k=>$(k).addEventListener("input",()=>{try{localStorage.setItem("plan",JSON.stringify({p_win:$("p_win").value,p_wind:$("p_wind").value,p_temp:$("p_temp").value}))}catch{};planner()}));
+
+
+(async()=>{
+  try{const res=await fetch("data.json?"+Date.now());const data=await res.json();
+    all=data.sightings.map(r=>({...r,_d:parseWhen(r.when)})).filter(r=>!isNaN(r._d));
+    profiles={};data.bucks.forEach(v=>{if(v&&v.name)profiles[v.name]=v});
+    const g=document.getElementById("gen");if(g)g.textContent="Updated "+new Date(data.generated).toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
+    render()}catch(e){$("loadMsg").textContent="Couldn't load the data file."}
+})();
+</script>
+
+</body></html>
