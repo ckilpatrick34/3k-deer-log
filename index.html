@@ -68,6 +68,16 @@ td button{padding:2px 8px;font-size:12px}
 details summary{cursor:pointer;font-weight:600}
 .thumb{width:72px;height:54px;object-fit:cover;border-radius:4px;display:block;cursor:zoom-in;background:var(--bg)}
 .buck .pic{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:6px;background:var(--bg);display:block}
+.gal{position:fixed;inset:0;background:rgba(10,12,8,.97);z-index:19;overflow:auto;padding:16px}
+.gal header{display:flex;justify-content:space-between;align-items:center;gap:8px;color:#e7e5da;max-width:1100px;margin:0 auto 12px}
+.gal header h2{margin:0;font-size:18px;color:#e7e5da}
+.gal header button{background:#e7e5da;color:#1d2117;border:0;border-radius:6px;padding:8px 14px;font:inherit;cursor:pointer}
+.gal .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;max-width:1100px;margin:0 auto}
+.gal figure{margin:0}.gal figure img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:6px;cursor:zoom-in;display:block;background:#222}
+.gal figcaption{color:#c9c7bb;font-size:12px;margin-top:3px}
+.lightbox .nav{position:fixed;top:50%;transform:translateY(-50%);background:rgba(231,229,218,.85);color:#1d2117;border:0;border-radius:50%;width:44px;height:44px;font-size:22px;cursor:pointer}
+.lightbox .nav.l{left:12px}.lightbox .nav.r{right:12px}
+.buck .more{font-size:13px;color:var(--moss);text-decoration:underline;cursor:pointer}
 .lightbox{position:fixed;inset:0;background:rgba(10,12,8,.88);display:grid;place-items:center;z-index:20;padding:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));cursor:zoom-out}
 .lightbox img{max-width:100%;max-height:85vh;border-radius:6px}
 .lightbox p{color:#e7e5da;margin:8px 0 0;text-align:center;font-size:13px}
@@ -467,7 +477,7 @@ function bucks(){
     const bcText=[...bc.list.map(x=>x.f.fmt?x.f.fmt(x.v):x.v),bc.cam].filter(Boolean).join(" · ");
     const best=prof.photo?{photo:prof.photo,_d:prof.when?parseWhen(prof.when):last,camera:prof.camera||cam}:(rs.find(r=>r.photo&&/conf high/.test(r.notes||""))||rs.find(r=>r.photo&&/pts/.test(r.notes||""))||rs.find(r=>r.photo));
     return `<button class="buck${filter===name?" sel":""}" data-name="${esc(name)}">
-      ${best?`<img class="pic" src="${esc(best.photo)}" loading="lazy" alt="${esc(name)}" data-cap="${esc(name+" · "+fmtWhen(best._d)+" · "+best.camera)}">`:""}
+      ${best?`<img class="pic" src="${esc(best.photo)}" loading="lazy" alt="${esc(name)}" data-gal="${esc(name)}">`:""}${rs.filter(r=>r.photo).length?`<span class="more" data-gal="${esc(name)}">See all ${rs.filter(r=>r.photo).length} photos of him</span>`:""}
       <div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><h3>${esc(name)}</h3>${harvestedNames().has(name)?`<span class="pill gone">harvested ${esc(harvestedNames().get(name))}</span>`:`<span class="pill${recent?" hot":""}">${recent?"seen this week":rs.length+" pics"}</span>`}</div>
       <dl class="stats">
         ${prof.score_high?`<dt>Est. score</dt><dd><b>${esc(prof.score_low)}–${esc(prof.score_high)}″</b>${prof.score_conf?` <span style="color:var(--muted);font-size:12px">(${esc(prof.score_conf)})</span>`:""}</dd>`:""}
@@ -477,6 +487,7 @@ function bucks(){
         <dt>Busiest hour</dt><dd>${hrs?fmtHour(hrs[0]):"—"}</dd>
         <dt>Daylight</dt><dd>${Math.round(day/rs.length*100)}%</dd>
       </dl>${bcText?`<div style="background:var(--moss-soft);color:var(--ink);border-radius:6px;padding:6px 8px;font-size:13px"><span class="eyebrow" style="color:var(--moss)">Best odds</span><br>${esc(bcText)}</div>`:""}${prof.description?`<p class="note" style="margin:0;font-size:13px;color:var(--muted)">${esc(prof.description)}${prof.confidence?` · match confidence ${esc(prof.confidence)}`:""}${prof.score_basis?`<br><span style="font-size:12px">Score basis: ${esc(prof.score_basis)}</span>`:""}</p>`:""}</button>`}).join("");
+  el.querySelectorAll("[data-gal]").forEach(g=>g.onclick=e=>{e.stopPropagation();openGallery(g.dataset.gal)});
   el.querySelectorAll(".buck").forEach(b=>b.onclick=()=>{filter=filter===b.dataset.name?"":b.dataset.name;$("deerFilter").value=filter;render()});
 }
 
@@ -493,13 +504,27 @@ function render(){
   hbars($("tempChart"),count(rows,r=>tb(r.temp),["Under 20°","20s","30s","40s","50s","60° and up"]));
   const tbody=$("rows");
   tbody.innerHTML=rows.length?[...rows].sort((a,b)=>b._d-a._d).map(r=>`<tr><td class="num">${fmtWhen(r._d)}</td><td>${esc(r.camera)}</td><td>${esc(r.kind)}</td><td>${esc(r.name)}</td><td>${moonPhase(r._d)}</td><td>${esc(r.wind)}</td><td class="num">${r.temp??""}</td><td>${esc(r.notes)}</td><td></td></tr>`).join(""):'<tr><td colspan="9" class="empty">No sightings yet. Log your first one above.</td></tr>';
-  document.querySelectorAll("img.thumb,img.pic").forEach(im=>im.onclick=e=>{e.stopPropagation();openBox(im.src,im.dataset.cap||"")});
+  document.querySelectorAll("img.thumb").forEach(im=>im.onclick=e=>{e.stopPropagation();openBox(im.src,im.dataset.cap||"")});
   
 }
-function openBox(src,cap){const d=document.createElement("div");d.className="lightbox";d.setAttribute("role","dialog");
-  const im=document.createElement("img");im.src=src;im.alt=cap;const p=document.createElement("p");p.textContent=cap+" · tap to close";
-  const w=document.createElement("div");w.append(im,p);d.append(w);d.onclick=()=>d.remove();document.body.append(d);
-  const k=e=>{if(e.key==="Escape"){d.remove();removeEventListener("keydown",k)}};addEventListener("keydown",k)}
+function openGallery(name){
+  const prof=profiles[name]||{};
+  const rs=all.filter(r=>r.name===name&&r.photo).sort((a,b)=>b._d-a._d);
+  const items=rs.map(r=>({src:r.photo,cap:name+" · "+fmtWhen(r._d)+" · "+r.camera}));
+  if(prof.photo&&!items.some(i=>i.src===prof.photo))items.unshift({src:prof.photo,cap:name+" · cover"+(prof.when?" · "+fmtWhen(parseWhen(prof.when)):"")});
+  const d=document.createElement("div");d.className="gal";d.setAttribute("role","dialog");d.setAttribute("aria-label",name+" photos");
+  d.innerHTML=`<header><h2>${esc(name)} · ${items.length} photo${items.length===1?"":"s"}</h2><button type="button">Close</button></header><div class="grid">${items.map((it,i)=>`<figure><img src="${esc(it.src)}" loading="lazy" alt="${esc(it.cap)}" data-i="${i}"><figcaption>${esc(it.cap.split(" · ").slice(1).join(" · "))}</figcaption></figure>`).join("")}</div>`;
+  const close=()=>{d.remove();removeEventListener("keydown",k)};const k=e=>{if(e.key==="Escape"&&!document.querySelector(".lightbox"))close()};
+  d.querySelector("header button").onclick=close;d.querySelectorAll("img[data-i]").forEach(im=>im.onclick=()=>openBox(null,null,items,+im.dataset.i));
+  addEventListener("keydown",k);document.body.append(d)}
+function openBox(src,cap,items,idx){items=items||[{src,cap}];idx=idx||0;const d=document.createElement("div");d.className="lightbox";d.setAttribute("role","dialog");
+  const im=document.createElement("img");const p=document.createElement("p");
+  const show=()=>{im.src=items[idx].src;im.alt=items[idx].cap;p.textContent=items[idx].cap+(items.length>1?` · ${idx+1} of ${items.length}`:"")+" · tap to close"};show();
+  const w=document.createElement("div");w.append(im,p);d.append(w);
+  const go=n=>{idx=(idx+n+items.length)%items.length;show()};
+  if(items.length>1)[["l","‹",-1],["r","›",1]].forEach(([c,t,n])=>{const b=document.createElement("button");b.className="nav "+c;b.textContent=t;b.setAttribute("aria-label",n<0?"Previous":"Next");b.onclick=e=>{e.stopPropagation();go(n)};d.append(b)});
+  const close=()=>{d.remove();removeEventListener("keydown",k)};d.onclick=close;document.body.append(d);
+  const k=e=>{if(e.key==="Escape")close();else if(e.key==="ArrowLeft")go(-1);else if(e.key==="ArrowRight")go(1)};addEventListener("keydown",k)}
 function alertMsg(id,e){$(id).textContent=e?.code==="not_granted"||e?.code==="forbidden"?"You can view this log but not change it.":"Couldn't save. Try again in a moment."}
 
 function toRow(o){return{camera:String(o.camera||"").trim(),kind:o.kind||"Unknown",name:String(o.name||"").trim(),wind:o.wind||"",temp:o.temp===""||o.temp==null||isNaN(+o.temp)?null:+o.temp,notes:String(o.notes||"").trim(),when:o.when}}
