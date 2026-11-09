@@ -475,7 +475,7 @@ function bucks(){
     const bcText=[...bc.list.map(x=>x.f.fmt?x.f.fmt(x.v):x.v),bc.cam].filter(Boolean).join(" · ");
     const best=prof.photo?{photo:prof.photo,_d:prof.when?parseWhen(prof.when):last,camera:prof.camera||cam}:(rs.find(r=>r.photo&&/conf high/.test(r.notes||""))||rs.find(r=>r.photo&&/pts/.test(r.notes||""))||rs.find(r=>r.photo));
     return `<button class="buck${filter===name?" sel":""}" data-name="${esc(name)}">
-      ${best?`<img class="pic" src="${esc(best.photo)}" loading="lazy" alt="${esc(name)}" data-gal="${esc(name)}">`:""}${rs.filter(r=>r.photo).length?`<span class="more" data-gal="${esc(name)}">See all ${rs.filter(r=>r.photo).length} photos of him</span>`:""}
+      ${best?`<img class="pic" src="${esc(best.photo)}" loading="lazy" alt="${esc(name)}">`:""}
       <div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><h3>${esc(name)}</h3>${harvestedNames().has(name)?`<span class="pill gone">harvested ${esc(harvestedNames().get(name))}</span>`:`<span class="pill${recent?" hot":""}">${recent?"seen this week":rs.length+" pics"}</span>`}</div>
       <dl class="stats">
         ${prof.score_high?`<dt>Est. score</dt><dd><b>${esc(prof.score_low)}–${esc(prof.score_high)}″</b>${prof.score_conf?` <span style="color:var(--muted);font-size:12px">(${esc(prof.score_conf)})</span>`:""}</dd>`:""}
@@ -485,7 +485,6 @@ function bucks(){
         <dt>Busiest hour</dt><dd>${hrs?fmtHour(hrs[0]):"—"}</dd>
         <dt>Daylight</dt><dd>${Math.round(day/rs.length*100)}%</dd>
       </dl>${bcText?`<div style="background:var(--moss-soft);color:var(--ink);border-radius:6px;padding:6px 8px;font-size:13px"><span class="eyebrow" style="color:var(--moss)">Best odds</span><br>${esc(bcText)}</div>`:""}${prof.description?`<p class="note" style="margin:0;font-size:13px;color:var(--muted)">${esc(prof.description)}${prof.confidence?` · match confidence ${esc(prof.confidence)}`:""}${prof.score_basis?`<br><span style="font-size:12px">Score basis: ${esc(prof.score_basis)}</span>`:""}</p>`:""}</button>`}).join("");
-  el.querySelectorAll("[data-gal]").forEach(g=>g.onclick=e=>{e.stopPropagation();openGallery(g.dataset.gal)});
   el.querySelectorAll(".buck").forEach(b=>b.onclick=()=>{filter=filter===b.dataset.name?"":b.dataset.name;$("deerFilter").value=filter;render()});
 }
 
