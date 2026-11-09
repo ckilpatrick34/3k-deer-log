@@ -185,20 +185,6 @@ details summary{cursor:pointer;font-weight:600}
     </div>
   </section>
 
-  <section class="card" id="hogCard">
-    <div style="display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline;justify-content:space-between">
-      <h2>Hog tracker</h2><span style="font-size:13px;color:var(--muted)" id="hogSum"></span>
-    </div>
-    <div class="tiles" id="hogTiles"></div>
-    <div class="subgrid">
-      <div><h3>Hogs by hour</h3><div id="hogHour"></div></div>
-      <div><h3>Hogs per week</h3><div id="hogWeek"></div></div>
-    </div>
-    <details><summary>Recent hog groups</summary><div class="tablewrap"><table>
-      <thead><tr><th>When</th><th>Camera</th><th>Hogs</th><th>Wind</th><th>°F</th><th>Notes</th></tr></thead>
-      <tbody id="hogRows"></tbody></table></div></details>
-    <p class="note" id="predNote"></p>
-  </section>
 
   <section class="card" id="harvCard">
     <div style="display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline;justify-content:space-between">
@@ -411,7 +397,7 @@ function bars(el,vals,labs,every){const max=Math.max(1,...vals),W=360,H=130,pl=2
   let s=`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img">`;[0,1].forEach(f=>{const y=(H-pb)-(H-pb-12)*f;s+=`<line x1="${pl}" x2="${W}" y1="${y}" y2="${y}" stroke="var(--line)"></line><text x="${pl-3}" y="${y+3}" text-anchor="end">${Math.round(max*f)}</text>`});
   vals.forEach((n,i)=>{const bh=(H-pb-12)*n/max,x=pl+i*bw+1;s+=`<rect x="${x}" y="${H-pb-bh}" width="${Math.max(1,bw-2)}" height="${bh}" rx="1" fill="var(--accent)"><title>${labs[i]}: ${n}</title></rect>`;if(i%every===0)s+=`<text x="${x+bw/2}" y="${H-5}" text-anchor="middle">${labs[i]}</text>`});
   el.innerHTML=s+"</svg>"}
-function hogTracker(){
+function hogTracker(){if(!document.getElementById("hogTiles"))return;
   const n=r=>+r.count||1,el=$("hogTiles");
   if(!hogs.length){el.innerHTML='<div class="empty" style="grid-column:1/-1">No hogs logged yet. They\'re being logged from the trail cam photos and will show up here after the next refresh.</div>';["hogHour","hogWeek"].forEach(i=>$(i).innerHTML="");$("hogRows").innerHTML="";$("hogSum").textContent="";}
   else{
