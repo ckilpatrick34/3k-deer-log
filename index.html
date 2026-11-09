@@ -85,6 +85,14 @@ details summary{cursor:pointer;font-weight:600}
 .heat .c{height:20px;border-radius:2px;background:var(--accent)}
 .heat .lab{color:var(--ink);font-family:var(--body);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:6px}
 .trend-up{color:var(--moss);font-weight:600}.trend-down{color:var(--danger);font-weight:600}
+
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+.tile{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px;display:grid;gap:6px;font-size:13px}
+.tile.top{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.tile .big{font-family:var(--display);font-size:24px;line-height:1.1}
+.subgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+@media (max-width:760px){.subgrid{grid-template-columns:minmax(0,1fr)}}
+.pill.gone{background:var(--line);color:var(--muted)}
 </style>
 </head><body>
 
@@ -177,6 +185,32 @@ details summary{cursor:pointer;font-weight:600}
     </div>
   </section>
 
+  <section class="card" id="hogCard">
+    <div style="display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline;justify-content:space-between">
+      <h2>Hog tracker</h2><span style="font-size:13px;color:var(--muted)" id="hogSum"></span>
+    </div>
+    <div class="tiles" id="hogTiles"></div>
+    <div class="subgrid">
+      <div><h3>Hogs by hour</h3><div id="hogHour"></div></div>
+      <div><h3>Hogs per week</h3><div id="hogWeek"></div></div>
+    </div>
+    <details><summary>Recent hog groups</summary><div class="tablewrap"><table>
+      <thead><tr><th>When</th><th>Camera</th><th>Hogs</th><th>Wind</th><th>°F</th><th>Notes</th></tr></thead>
+      <tbody id="hogRows"></tbody></table></div></details>
+    <p class="note" id="predNote"></p>
+  </section>
+
+  <section class="card" id="harvCard">
+    <div style="display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline;justify-content:space-between">
+      <h2>Harvest log</h2><span style="font-size:13px;color:var(--muted)" id="harvSum"></span>
+    </div>
+    
+    <div class="tablewrap"><table>
+      <thead><tr><th>Date</th><th>Hunter</th><th>Stand</th><th>Animal</th><th>Buck</th><th>Points</th><th>Weight</th><th>Score</th><th>Notes</th></tr></thead>
+      <tbody id="harvRows"></tbody></table></div>
+    <p class="note">A buck logged here is marked harvested on his card and drops out of the planner, forecast and hit list.</p>
+  </section>
+
   <section class="card">
     <h2>All sightings</h2>
     <div class="tablewrap"><table>
@@ -228,7 +262,7 @@ function bestConditions(rs){
 function oddsFor(date,wi,wind,temp){
   const days=new Set(all.map(r=>r._d.toDateString())).size||1;
   const cond={win:WINS[wi][0],wind:wind||null,temp:temp===""||temp==null?null:tband(temp),moon:moon4(date)};
-  const named=new Map();all.forEach(r=>{if(r.name&&r.kind==="Buck"){(named.get(r.name)||named.set(r.name,[]).get(r.name)).push(r)}});
+  const hv=harvestedNames(),named=new Map();all.forEach(r=>{if(r.name&&r.kind==="Buck"&&!hv.has(r.name)){(named.get(r.name)||named.set(r.name,[]).get(r.name)).push(r)}});
   const res=[];
   named.forEach((rs,name)=>{
     const base=rs.length/days;let lam=base;const why=[];
@@ -257,8 +291,8 @@ function planner(){
 }
 
 // ---- Location, sun times, shooting light ----
-const DEF_LOC={lat:33.45,lon:-88.82,label:"the Starkville, MS area"};
-let LOC=DEF_LOC;try{const s=JSON.parse(localStorage.getItem("loc")||"null");if(s&&isFinite(s.lat)&&isFinite(s.lon))LOC=s}catch{}
+const DEF_LOC={lat:32.855,lon:-90.406,label:"Yazoo City, MS"};
+let LOC=DEF_LOC;try{const s=JSON.parse(localStorage.getItem("loc")||"null");if(s&&s.label==="your location"&&isFinite(s.lat)&&isFinite(s.lon))LOC=s}catch{}
 // sunrise/sunset (NOAA-style approximation, within a couple of minutes)
 function sunTimes(d,lat,lon){const r=Math.PI/180,S=x=>Math.sin(x*r),Co=x=>Math.cos(x*r);
   const jd=Date.UTC(d.getFullYear(),d.getMonth(),d.getDate(),12)/864e5+2440587.5;
@@ -320,7 +354,7 @@ $("fcHere").onclick=()=>{if(!navigator.geolocation){$("fcNote").textContent="Thi
   navigator.geolocation.getCurrentPosition(p=>{LOC={lat:+p.coords.latitude.toFixed(3),lon:+p.coords.longitude.toFixed(3),label:"your location"};try{localStorage.setItem("loc",JSON.stringify(LOC))}catch{};sunCache.clear();loadForecast();render()},()=>{$("fcNote").textContent="Location wasn't shared, so the forecast stays on "+LOC.label+"."})};
 
 // ---- Hit list, weekly daylight trend, camera-by-hour, buck calendar ----
-function namedBucks(){const m=new Map();all.forEach(r=>{if(r.name&&r.kind==="Buck"){(m.get(r.name)||m.set(r.name,[]).get(r.name)).push(r)}});return m}
+function namedBucks(){const hv=harvestedNames(),m=new Map();all.forEach(r=>{if(r.name&&r.kind==="Buck"&&!hv.has(r.name)){(m.get(r.name)||m.set(r.name,[]).get(r.name)).push(r)}});return m}
 function hitList(){
   const latest=all.reduce((a,r)=>r._d>a?r._d:a,new Date(0)),D=864e5,now=Date.now();
   const rows=[...namedBucks().entries()].map(([name,rs])=>{
@@ -368,6 +402,45 @@ function calChart(){
   el.innerHTML=h+`</div><div style="font-size:12px;color:var(--muted);margin-top:4px">Days ending ${latest.toLocaleDateString(undefined,{month:"short",day:"numeric"})}, the newest photo in the log.</div>`;
 }
 
+
+// ---- Hogs and predators (kept out of the deer stats) ----
+const NONDEER=new Set(["Hog","Predator"]);
+let hogs=[],preds=[],harvests=[];
+const harvestedNames=()=>{const m=new Map();harvests.forEach(h=>{if(h.kind==="Buck"&&h.name)m.set(h.name,h.date)});return m};
+function bars(el,vals,labs,every){const max=Math.max(1,...vals),W=360,H=130,pl=22,pb=18,bw=(W-pl)/vals.length;
+  let s=`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img">`;[0,1].forEach(f=>{const y=(H-pb)-(H-pb-12)*f;s+=`<line x1="${pl}" x2="${W}" y1="${y}" y2="${y}" stroke="var(--line)"></line><text x="${pl-3}" y="${y+3}" text-anchor="end">${Math.round(max*f)}</text>`});
+  vals.forEach((n,i)=>{const bh=(H-pb-12)*n/max,x=pl+i*bw+1;s+=`<rect x="${x}" y="${H-pb-bh}" width="${Math.max(1,bw-2)}" height="${bh}" rx="1" fill="var(--accent)"><title>${labs[i]}: ${n}</title></rect>`;if(i%every===0)s+=`<text x="${x+bw/2}" y="${H-5}" text-anchor="middle">${labs[i]}</text>`});
+  el.innerHTML=s+"</svg>"}
+function hogTracker(){
+  const n=r=>+r.count||1,el=$("hogTiles");
+  if(!hogs.length){el.innerHTML='<div class="empty" style="grid-column:1/-1">No hogs logged yet. They\'re being logged from the trail cam photos and will show up here after the next refresh.</div>';["hogHour","hogWeek"].forEach(i=>$(i).innerHTML="");$("hogRows").innerHTML="";$("hogSum").textContent="";}
+  else{
+  const latest=hogs.concat(all).reduce((a,r)=>r._d>a?r._d:a,new Date(0)),D=864e5;
+  const cams=new Map();hogs.forEach(r=>{const c=cams.get(r.camera)||[];c.push(r);cams.set(r.camera,c)});
+  const tiles=[...cams.entries()].map(([cam,rs])=>{const nights=new Set(rs.filter(r=>latest-r._d<14*D).map(r=>{const d=new Date(r._d-12*36e5);return d.toDateString()})).size;
+    const last=rs.reduce((a,r)=>r._d>a?r._d:a,new Date(0)),tot=rs.reduce((a,r)=>a+n(r),0),big=Math.max(...rs.map(n)),hr=count(rs,r=>r._d.getHours())[0];
+    const day=rs.filter(r=>{const h=r._d.getHours();return h>=6&&h<18}).length;
+    return{cam,rs,nights,last,tot,big,hr:hr?hr[0]:null,day:Math.round(day/rs.length*100)}}).sort((a,b)=>b.nights-a.nights||b.last-a.last);
+  el.innerHTML=tiles.map((t,i)=>`<div class="tile${i===0&&t.nights?" top":""}"><div class="eyebrow">${i===0&&t.nights?"Best hog stand now":"Camera"}</div><h3>${esc(t.cam)}</h3>
+    <div><span class="big">${t.nights}</span> <span style="color:var(--muted)">of the last 14 nights</span></div>
+    <div>${t.tot} hogs in ${t.rs.length} groups · biggest ${t.big}</div><div style="color:var(--muted)">Usually ${t.hr!=null?fmtHour(t.hr):"—"} · ${t.day}% in daylight · last ${fmtWhen(t.last)}</div></div>`).join("");
+  const hh=new Array(24).fill(0);hogs.forEach(r=>hh[r._d.getHours()]+=n(r));bars($("hogHour"),hh,hh.map((_,i)=>fmtHour(i)),3);
+  const wk=new Map();hogs.forEach(r=>{const x=new Date(r._d);x.setHours(0,0,0,0);x.setDate(x.getDate()-((x.getDay()+6)%7));wk.set(+x,(wk.get(+x)||0)+n(r))});
+  const ks=[...wk.keys()].sort((a,b)=>a-b),wl=[];for(let t=ks[0];t<=ks[ks.length-1];t+=7*D){const x=new Date(t+12*36e5);x.setHours(0,0,0,0);wl.push(+x)}
+  bars($("hogWeek"),wl.map(k=>wk.get(k)||0),wl.map(k=>new Date(k).toLocaleDateString(undefined,{month:"short",day:"numeric"})),Math.max(1,Math.ceil(wl.length/6)));
+  const tot=hogs.reduce((a,r)=>a+n(r),0);$("hogSum").textContent=`${tot} hogs in ${hogs.length} group${hogs.length===1?"":"s"} since ${hogs.reduce((a,r)=>r._d<a?r._d:a,new Date(8.64e15)).toLocaleDateString(undefined,{month:"short",day:"numeric"})}`;
+  $("hogRows").innerHTML=[...hogs].sort((a,b)=>b._d-a._d).slice(0,40).map(r=>`<tr><td class="num">${fmtWhen(r._d)}</td><td>${esc(r.camera)}</td><td class="num">${n(r)}</td><td>${esc(r.wind)}</td><td class="num">${r.temp??""}</td><td>${esc(r.notes)}</td></tr>`).join("");}
+  $("predNote").textContent=preds.length?`Predators on camera: ${count(preds,r=>r.camera).map(([c,k])=>`${c} ${k}`).join(", ")}. Last: ${fmtWhen(preds.reduce((a,r)=>r._d>a?r._d:a,new Date(0)))}${preds.length?" ("+esc((preds.reduce((a,r)=>r._d>a._d?r:a)).notes||"")+")":""}.`:"";
+}
+function harvestLog(){
+  const hs=[...harvests].sort((a,b)=>String(b.date+b.time).localeCompare(String(a.date+a.time)));
+  const c=k=>hs.filter(h=>h.kind===k).length;
+  $("harvSum").textContent=hs.length?"Season: "+[["Buck","buck","bucks"],["Doe","doe","does"],["Hog","hog","hogs"],["Other","other","other"]].filter(([k],i)=>i<3||c(k)).map(([k,a,b])=>`${c(k)} ${c(k)===1?a:b}`).join(", "):"";
+  const del=typeof db!=="undefined"&&db&&typeof hcol!=="undefined"&&hcol;
+  $("harvRows").innerHTML=hs.length?hs.map(h=>`<tr><td class="num">${esc(h.date)}${h.time?" "+esc(h.time):""}</td><td>${esc(h.hunter)}</td><td>${esc(h.stand)}</td><td>${esc(h.kind)}</td><td>${esc(h.name)}</td><td class="num">${h.points??""}</td><td class="num">${h.weight?esc(h.weight)+" lb":""}</td><td class="num">${h.score?esc(h.score)+"″":""}</td><td style="white-space:normal;min-width:180px">${esc(h.notes)}</td>${del?`<td><button data-hdel="${esc(h.id)}">Delete</button></td>`:""}</tr>`).join(""):`<tr><td colspan="10" class="empty">Nothing harvested yet this season.</td></tr>`;
+  if(del)$("harvRows").querySelectorAll("[data-hdel]").forEach(b=>b.onclick=()=>hcol.doc(b.dataset.hdel).delete().catch(()=>{}));
+}
+
 function view(){if(!filter)return all;if(filter==="@Doe")return all.filter(r=>r.kind==="Doe");if(filter==="@Fawn")return all.filter(r=>r.kind==="Fawn");if(filter==="@Buck")return all.filter(r=>r.kind==="Buck");if(filter==="@Unnamed")return all.filter(r=>r.kind==="Buck"&&!r.name);return all.filter(r=>(r.name||"")===filter)}
 
 function hbars(el,entries){
@@ -409,7 +482,7 @@ function bucks(){
     const best=prof.photo?{photo:prof.photo,_d:prof.when?parseWhen(prof.when):last,camera:prof.camera||cam}:(rs.find(r=>r.photo&&/conf high/.test(r.notes||""))||rs.find(r=>r.photo&&/pts/.test(r.notes||""))||rs.find(r=>r.photo));
     return `<button class="buck${filter===name?" sel":""}" data-name="${esc(name)}">
       ${best?`<img class="pic" src="${esc(best.photo)}" loading="lazy" alt="${esc(name)}" data-cap="${esc(name+" · "+fmtWhen(best._d)+" · "+best.camera)}">`:""}
-      <div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><h3>${esc(name)}</h3><span class="pill${recent?" hot":""}">${recent?"seen this week":rs.length+" pics"}</span></div>
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><h3>${esc(name)}</h3>${harvestedNames().has(name)?`<span class="pill gone">harvested ${esc(harvestedNames().get(name))}</span>`:`<span class="pill${recent?" hot":""}">${recent?"seen this week":rs.length+" pics"}</span>`}</div>
       <dl class="stats">
         ${prof.score_high?`<dt>Est. score</dt><dd><b>${esc(prof.score_low)}–${esc(prof.score_high)}″</b>${prof.score_conf?` <span style="color:var(--muted);font-size:12px">(${esc(prof.score_conf)})</span>`:""}</dd>`:""}
         <dt>Sightings</dt><dd>${rs.length}</dd>
@@ -426,7 +499,7 @@ function render(){
   const sel=$("deerFilter");sel.innerHTML='<option value="">All deer</option>'+[["@Buck","All bucks"],["@Doe","Does (group)"],["@Fawn","Fawns (group)"],["@Unnamed","Unidentified bucks"]].map(([v,l])=>`<option value="${v}"${v===filter?" selected":""}>${l}</option>`).join("")+names.map(n=>`<option${n===filter?" selected":""}>${esc(n)}</option>`).join("");
   
   const rows=view();
-  bucks();hourChart(rows);planner();hitList();rutChart(rows);heatChart(rows);calChart();renderForecast();
+  bucks();hourChart(rows);planner();hitList();rutChart(rows);heatChart(rows);calChart();renderForecast();hogTracker();harvestLog();
   hbars($("camChart"),count(rows,r=>r.camera));
   hbars($("moonChart"),count(rows,r=>moonPhase(r._d),MOONS));
   hbars($("windChart"),count(rows,r=>r.wind,WINDS));
@@ -454,7 +527,7 @@ try{const s=JSON.parse(localStorage.getItem("plan")||"{}");["p_win","p_wind","p_
 
 (async()=>{
   try{const res=await fetch("data.json?"+Date.now());const data=await res.json();
-    all=data.sightings.map(r=>({...r,_d:parseWhen(r.when)})).filter(r=>!isNaN(r._d));
+    const rowsAll=data.sightings.map(r=>({...r,_d:parseWhen(r.when)})).filter(r=>!isNaN(r._d));all=rowsAll.filter(r=>!NONDEER.has(r.kind));hogs=rowsAll.filter(r=>r.kind==="Hog");preds=rowsAll.filter(r=>r.kind==="Predator");harvests=data.harvests||[];
     profiles={};data.bucks.forEach(v=>{if(v&&v.name)profiles[v.name]=v});
     const g=document.getElementById("gen");if(g)g.textContent="Updated "+new Date(data.generated).toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
     render();loadForecast()}catch(e){console.error(e);$("loadMsg").textContent="Couldn't load the data file."}
