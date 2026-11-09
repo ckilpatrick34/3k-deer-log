@@ -71,6 +71,20 @@ details summary{cursor:pointer;font-weight:600}
 .lightbox{position:fixed;inset:0;background:rgba(10,12,8,.88);display:grid;place-items:center;z-index:20;padding:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));cursor:zoom-out}
 .lightbox img{max-width:100%;max-height:85vh;border-radius:6px}
 .lightbox p{color:#e7e5da;margin:8px 0 0;text-align:center;font-size:13px}
+
+.fcdays{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+.fcday{border:1px solid var(--line);border-radius:10px;padding:12px;display:grid;gap:8px;background:var(--bg)}
+.fcday.top{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.fcday .meta{font-size:12px;color:var(--muted)}
+.sit{background:var(--panel);border-radius:8px;padding:10px;display:grid;gap:4px;font-size:13px}
+.sit.past{opacity:.5}
+.sit .wx{font-family:var(--mono);font-size:12px}
+.sit .arrow{display:inline-block;width:1em;text-align:center}
+.sit button{justify-self:start;font-size:12px;padding:3px 9px;margin-top:2px}
+.heat{display:grid;gap:2px;font-family:var(--mono);font-size:10px;color:var(--muted);min-width:520px}
+.heat .c{height:20px;border-radius:2px;background:var(--accent)}
+.heat .lab{color:var(--ink);font-family:var(--body);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:6px}
+.trend-up{color:var(--moss);font-weight:600}.trend-down{color:var(--danger);font-weight:600}
 </style>
 </head><body>
 
@@ -87,8 +101,16 @@ details summary{cursor:pointer;font-weight:600}
     </div>
   </header>
 
+  <section class="card" id="fcCard">
+    <div style="display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline;justify-content:space-between">
+      <h2>Next 3 days</h2>
+      <span style="font-size:13px;color:var(--muted)">Forecast for <span id="fcLoc"></span> <button id="fcHere" type="button" style="font-size:12px;padding:3px 9px">Use my location</button></span>
+    </div>
+    <p class="note" id="fcNote">Loading the forecast…</p>
+    <div id="fcDays" class="fcdays"></div>
+  </section>
 
-  <section class="card">
+  <section class="card" id="planCard">
     <div style="display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline;justify-content:space-between">
       <h2>Hunt planner</h2>
       <span class="note" style="color:var(--muted);font-size:13px">Enter the sit you're planning. Bucks are ranked by how often they've shown up under conditions like these.</span>
@@ -129,6 +151,31 @@ details summary{cursor:pointer;font-weight:600}
     <div class="card"><h2>Temperature</h2><p class="note">From the temperature on the photo strip.</p><div id="tempChart"></div></div>
   </section>
 
+  <section class="grid">
+    <div class="card wide">
+      <h2>Buck hit list</h2>
+      <p class="note">Who's moving right now, newest first. "Shooting light" means 30 minutes before sunrise to 30 minutes after sunset.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Buck</th><th>Est. score</th><th>Last seen</th><th>Last 7 days</th><th>7 days before</th><th>Shooting-light visits (14 days)</th><th>Last in shooting light</th><th>Where lately</th></tr></thead>
+        <tbody id="hitRows"></tbody>
+      </table></div>
+    </div>
+    <div class="card wide">
+      <h2>Daylight movement by week</h2>
+      <p class="note" id="rutNote">Sightings each week, split by shooting light and dark.</p>
+      <div id="rutChart"></div>
+    </div>
+    <div class="card wide">
+      <h2>Camera by hour</h2>
+      <p class="note">Darker squares mean more sightings at that camera in that hour. Follows the "Showing" filter at the top.</p>
+      <div class="tablewrap" id="heatChart"></div>
+    </div>
+    <div class="card wide">
+      <h2>Buck calendar · last 30 days</h2>
+      <p class="note">Each square is a day the buck was on camera. Orange means at least one visit in shooting light; green means dark only.</p>
+      <div class="tablewrap" id="calChart"></div>
+    </div>
+  </section>
 
   <section class="card">
     <h2>All sightings</h2>
@@ -178,11 +225,9 @@ function bestConditions(rs){
   const cam=count(rs,r=>r.camera)[0];
   return{list:out,cam:cam?cam[0]:null};
 }
-function planner(){
+function oddsFor(date,wi,wind,temp){
   const days=new Set(all.map(r=>r._d.toDateString())).size||1;
-  const dIn=$("p_date").value,date=dIn?new Date(dIn+"T12:00"):new Date();
-  const wi=+$("p_win").value,wind=$("p_wind").value,temp=$("p_temp").value;
-  const cond={win:WINS[wi][0],wind:wind||null,temp:temp===""?null:tband(temp),moon:moon4(date)};
+  const cond={win:WINS[wi][0],wind:wind||null,temp:temp===""||temp==null?null:tband(temp),moon:moon4(date)};
   const named=new Map();all.forEach(r=>{if(r.name&&r.kind==="Buck"){(named.get(r.name)||named.set(r.name,[]).get(r.name)).push(r)}});
   const res=[];
   named.forEach((rs,name)=>{
@@ -196,12 +241,131 @@ function planner(){
     res.push({name,prof:profiles[name]||{},prob,lam,stand,why:why.sort((a,b)=>Math.abs(Math.log(b[1]))-Math.abs(Math.log(a[1]))).slice(0,2).map(w=>w[0]),n:rs.length,inWin:inWin.length});
   });
   res.sort((a,b)=>b.prob-a.prob);
-  $("planNote").textContent=`${cond.moon} on ${date.toLocaleDateString(undefined,{month:"short",day:"numeric"})}. Based on ${all.length} sightings over ${days} days.`;
-  const pct=p=>p>=.995?"99%+":p<.01?"<1%":Math.round(p*100)+"%";
-  $("planRows").innerHTML=res.length?res.map(r=>`<tr><td><b>${esc(r.name)}</b></td><td class="num">${r.prof.score_high?`${esc(r.prof.score_low)}–${esc(r.prof.score_high)}″`:"—"}</td><td class="num"><span class="pill${r.prob>=.25?" hot":""}">${pct(r.prob)}</span></td><td>${esc(r.stand||"—")}${r.inWin?"":` <span style="color:var(--muted)">(never seen this window)</span>`}</td><td style="white-space:normal;min-width:220px">${r.why.map(esc).join("; ")}</td></tr>`).join(""):'<tr><td colspan="5" class="empty">Name some bucks first.</td></tr>';
   // stands: sum of each buck's odds at the stand he uses in this window, weighted toward bigger bucks
   const st=new Map();res.forEach(r=>{if(!r.stand||!r.inWin)return;const s=st.get(r.stand)||{w:0,b:[]};s.w+=r.lam*((r.prof.score_high||100)/100);s.b.push(r);st.set(r.stand,s)});
-  $("planStands").innerHTML=[...st.entries()].sort((a,b)=>b[1].w-a[1].w).slice(0,3).map(([cam,s],i)=>`<div class="buck" style="cursor:default"><div class="eyebrow">${i===0?"Best stand":"Next best"}</div><h3>${esc(cam)}</h3><p class="note" style="margin:0;font-size:13px;color:var(--muted)">${s.b.sort((a,b)=>b.prob-a.prob).slice(0,3).map(b=>`${esc(b.name)} ${pct(b.prob)}`).join(" · ")}</p></div>`).join("");
+  const stands=[...st.entries()].sort((a,b)=>b[1].w-a[1].w);
+  return{res,stands,cond,days};
+}
+const pct=p=>p>=.995?"99%+":p<.01?"<1%":Math.round(p*100)+"%";
+function planner(){
+  const dIn=$("p_date").value,date=dIn?new Date(dIn+"T12:00"):new Date();
+  const wi=+$("p_win").value;
+  const {res,stands,cond,days}=oddsFor(date,wi,$("p_wind").value,$("p_temp").value);
+  $("planNote").textContent=`${cond.moon} on ${date.toLocaleDateString(undefined,{month:"short",day:"numeric"})}. Based on ${all.length} sightings over ${days} days.`;
+  $("planRows").innerHTML=res.length?res.map(r=>`<tr><td><b>${esc(r.name)}</b></td><td class="num">${r.prof.score_high?`${esc(r.prof.score_low)}–${esc(r.prof.score_high)}″`:"—"}</td><td class="num"><span class="pill${r.prob>=.25?" hot":""}">${pct(r.prob)}</span></td><td>${esc(r.stand||"—")}${r.inWin?"":` <span style="color:var(--muted)">(never seen this window)</span>`}</td><td style="white-space:normal;min-width:220px">${r.why.map(esc).join("; ")}</td></tr>`).join(""):'<tr><td colspan="5" class="empty">Name some bucks first.</td></tr>';
+  $("planStands").innerHTML=stands.slice(0,3).map(([cam,s],i)=>`<div class="buck" style="cursor:default"><div class="eyebrow">${i===0?"Best stand":"Next best"}</div><h3>${esc(cam)}</h3><p class="note" style="margin:0;font-size:13px;color:var(--muted)">${s.b.sort((a,b)=>b.prob-a.prob).slice(0,3).map(b=>`${esc(b.name)} ${pct(b.prob)}`).join(" · ")}</p></div>`).join("");
+}
+
+// ---- Location, sun times, shooting light ----
+const DEF_LOC={lat:33.45,lon:-88.82,label:"the Starkville, MS area"};
+let LOC=DEF_LOC;try{const s=JSON.parse(localStorage.getItem("loc")||"null");if(s&&isFinite(s.lat)&&isFinite(s.lon))LOC=s}catch{}
+// sunrise/sunset (NOAA-style approximation, within a couple of minutes)
+function sunTimes(d,lat,lon){const r=Math.PI/180,S=x=>Math.sin(x*r),Co=x=>Math.cos(x*r);
+  const jd=Date.UTC(d.getFullYear(),d.getMonth(),d.getDate(),12)/864e5+2440587.5;
+  const n=Math.round(jd-2451545+.0008),J=n-lon/360,M=(357.5291+.98560028*J)%360;
+  const C=1.9148*S(M)+.02*S(2*M)+.0003*S(3*M),L=(M+C+282.9372)%360;
+  const Jt=2451545+J+.0053*S(M)-.0069*S(2*L),dec=Math.asin(S(L)*S(23.44))/r;
+  const H=Math.acos(Math.max(-1,Math.min(1,(S(-.833)-S(lat)*S(dec))/(Co(lat)*Co(dec)))))/r;
+  const toD=j=>new Date((j-2440587.5)*864e5);return{rise:toD(Jt-H/360),set:toD(Jt+H/360)}}
+const sunCache=new Map();
+function sunFor(d){const k=d.toDateString();if(!sunCache.has(k))sunCache.set(k,sunTimes(d,LOC.lat,LOC.lon));return sunCache.get(k)}
+const legal=d=>{const s=sunFor(d);return d>=s.rise-18e5&&d<=+s.set+18e5};
+const fmtT=d=>d.toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"}).replace(" AM","a").replace(" PM","p");
+const moonIll=d=>Math.round((1-Math.cos(2*Math.PI*moonAge(d)/29.530588853))/2*100);
+const dayKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+
+// ---- Forecast: next 3 days, morning and evening sits ----
+let fc=null;
+const deg2c=d=>WINDS[Math.round((((d%360)+360)%360)/45)%8];
+async function loadForecast(){
+  $("fcLoc").textContent=LOC.label;
+  try{const u=`https://api.open-meteo.com/v1/forecast?latitude=${LOC.lat}&longitude=${LOC.lon}&hourly=temperature_2m,wind_direction_10m,wind_speed_10m,precipitation_probability,surface_pressure&daily=sunrise,sunset&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=America%2FChicago&forecast_days=4`;
+    const r=await fetch(u);if(!r.ok)throw 0;fc=await r.json();renderForecast()}
+  catch(e){$("fcNote").textContent="Couldn't load the weather forecast right now. The planner below still works if you type in the wind and temperature."}
+}
+function renderForecast(){
+  if(!fc||!all.length)return;
+  const H=fc.hourly,idx=new Map(H.time.map((t,i)=>[t,i])),now=new Date();
+  let best=null;const days=[];
+  for(let k=0;k<3&&k<fc.daily.time.length;k++){
+    const day=fc.daily.time[k],date=new Date(day+"T12:00");
+    const rise=new Date(fc.daily.sunrise[k]),set=new Date(fc.daily.sunset[k]);
+    const sits=[[0,7,"Morning sit"],[2,16,"Evening sit"]].map(([wi,h,lab])=>{
+      const i=idx.get(`${day}T${String(h).padStart(2,"0")}:00`);if(i==null)return null;
+      const t=Math.round(H.temperature_2m[i]),deg=H.wind_direction_10m[i],wd=deg2c(deg),ws=Math.round(H.wind_speed_10m[i]);
+      const rain=H.precipitation_probability?H.precipitation_probability[i]:null;
+      const p=H.surface_pressure[i],p0=i>=6?H.surface_pressure[i-6]:null;
+      const trend=p0==null?"":p-p0>1?"rising":p-p0<-1?"falling":"steady";
+      const o=oddsFor(date,wi,wd,t);
+      const score=o.res.reduce((a,r)=>a+r.lam*((r.prof.score_high||100)/100),0);
+      const past=new Date(`${day}T${String(h+3).padStart(2,"0")}:00`)<now;
+      const sit={k,lab,wi,day,t,deg,wd,ws,rain,inHg:(p*.02953).toFixed(2),trend,o,score,past};
+      if(!past&&(!best||score>best.score))best=sit;return sit}).filter(Boolean);
+    days.push({k,day,date,rise,set,sits});
+  }
+  $("fcNote").textContent=best?`Best sit of the next 3 days: ${best.date?"":""}${new Date(best.day+"T12:00").toLocaleDateString(undefined,{weekday:"long"})} ${best.lab.toLowerCase()}${best.o.stands[0]?` at ${best.o.stands[0][0]}`:""}. Odds use each buck's history under the forecast wind, temperature, time and moon.`:"";
+  $("fcDays").innerHTML=days.map(d=>`<div class="fcday${best&&best.k===d.k?" top":""}">
+    <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><h3>${d.date.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"})}</h3>${best&&best.k===d.k?'<span class="pill hot">best day</span>':""}</div>
+    <div class="meta">Shooting light ${fmtT(new Date(d.rise-18e5))} – ${fmtT(new Date(+d.set+18e5))} · ${moonPhase(d.date)} moon, ${moonIll(d.date)}% lit</div>
+    ${d.sits.map(s=>{const top=s.o.res.filter(r=>r.inWin).slice(0,3);const st=s.o.stands[0];return `<div class="sit${s.past?" past":""}">
+      <div class="eyebrow">${s.lab}${best===s?" · best sit":""}${s.past?" · over":""}</div>
+      <div class="wx"><span class="arrow" style="transform:rotate(${s.deg}deg)" aria-hidden="true">↓</span>${s.wd} ${s.ws} mph · ${s.t}°F${s.rain!=null?` · ${s.rain}% rain`:""} · ${s.inHg} in ${s.trend}</div>
+      <div>Best stand: <b>${esc(st?st[0]:"—")}</b></div>
+      <div style="color:var(--muted)">${top.length?top.map(r=>`${esc(r.name)} ${pct(r.prob)}`).join(" · "):"No named bucks seen in this window yet"}</div>
+      <button type="button" data-plan="${s.day}|${s.wi}|${s.wd}|${s.t}">Open in planner</button></div>`}).join("")}
+  </div>`).join("");
+  $("fcDays").querySelectorAll("button[data-plan]").forEach(b=>b.onclick=()=>{const[d,w,wd,t]=b.dataset.plan.split("|");$("p_date").value=d;$("p_win").value=w;$("p_wind").value=wd;$("p_temp").value=t;planner();$("planCard").scrollIntoView({behavior:"smooth"})});
+}
+$("fcHere").onclick=()=>{if(!navigator.geolocation){$("fcNote").textContent="This browser can't share its location.";return}
+  navigator.geolocation.getCurrentPosition(p=>{LOC={lat:+p.coords.latitude.toFixed(3),lon:+p.coords.longitude.toFixed(3),label:"your location"};try{localStorage.setItem("loc",JSON.stringify(LOC))}catch{};sunCache.clear();loadForecast();render()},()=>{$("fcNote").textContent="Location wasn't shared, so the forecast stays on "+LOC.label+"."})};
+
+// ---- Hit list, weekly daylight trend, camera-by-hour, buck calendar ----
+function namedBucks(){const m=new Map();all.forEach(r=>{if(r.name&&r.kind==="Buck"){(m.get(r.name)||m.set(r.name,[]).get(r.name)).push(r)}});return m}
+function hitList(){
+  const latest=all.reduce((a,r)=>r._d>a?r._d:a,new Date(0)),D=864e5,now=Date.now();
+  const rows=[...namedBucks().entries()].map(([name,rs])=>{
+    const last=rs.reduce((a,r)=>r._d>a?r._d:a,new Date(0));
+    const n7=rs.filter(r=>latest-r._d<7*D).length,p7=rs.filter(r=>latest-r._d>=7*D&&latest-r._d<14*D).length;
+    const r14=rs.filter(r=>latest-r._d<14*D),lg=r14.filter(r=>legal(r._d));
+    const ll=rs.filter(r=>legal(r._d)).reduce((a,r)=>!a||r._d>a?r._d:a,null);
+    const cams=count(r14.length?r14:rs,r=>r.camera).slice(0,2).map(c=>c[0]).join(", ");
+    return{name,prof:profiles[name]||{},last,n7,p7,lg:lg.length,ll,cams}}).sort((a,b)=>b.last-a.last);
+  const ago=d=>{const x=Math.floor((now-d)/864e5);return x<=0?"today":x===1?"yesterday":x+" days ago"};
+  $("hitRows").innerHTML=rows.length?rows.map(r=>{const tr=r.n7>r.p7*1.3&&r.n7>=2?'<span class="trend-up">▲</span>':r.n7<r.p7/1.3?'<span class="trend-down">▼</span>':"";
+    return `<tr><td><b>${esc(r.name)}</b></td><td class="num">${r.prof.score_high?`${esc(r.prof.score_low)}–${esc(r.prof.score_high)}″`:"—"}</td><td class="num">${fmtWhen(r.last)} <span style="color:var(--muted)">(${ago(r.last)})</span></td><td class="num">${r.n7} ${tr}</td><td class="num">${r.p7}</td><td class="num">${r.lg?`<span class="pill hot">${r.lg}</span>`:"0"}</td><td class="num">${r.ll?fmtWhen(r.ll):"never"}</td><td>${esc(r.cams)}</td></tr>`}).join(""):'<tr><td colspan="8" class="empty">No named bucks yet.</td></tr>';
+}
+function weekStart(d){const x=new Date(d);x.setHours(0,0,0,0);x.setDate(x.getDate()-((x.getDay()+6)%7));return x}
+function rutChart(rows){
+  const el=$("rutChart");if(!rows.length){el.innerHTML='<div class="empty">No data yet</div>';$("rutNote").textContent="";return}
+  const wk=new Map();rows.forEach(r=>{const k=+weekStart(r._d);const w=wk.get(k)||{l:0,n:0};legal(r._d)?w.l++:w.n++;wk.set(k,w)});
+  const first=Math.min(...wk.keys()),last=Math.max(...wk.keys()),weeks=[];for(let t=first;t<=last;t+=7*864e5){const k=+weekStart(new Date(t+36e5*12));weeks.push([k,wk.get(k)||{l:0,n:0}])}
+  const max=Math.max(1,...weeks.map(w=>w[1].l+w[1].n)),W=720,Hh=170,pl=28,pb=34,bw=(W-pl)/weeks.length;
+  let s=`<svg viewBox="0 0 ${W} ${Hh}" width="100%" role="img" aria-label="Sightings per week in shooting light and dark">`;
+  [0,.5,1].forEach(f=>{const y=(Hh-pb)-(Hh-pb-16)*f;s+=`<line x1="${pl}" x2="${W}" y1="${y}" y2="${y}" stroke="var(--line)"></line><text x="${pl-4}" y="${y+3}" text-anchor="end">${Math.round(max*f)}</text>`});
+  weeks.forEach(([k,w],i)=>{const x=pl+i*bw+2,bwid=Math.max(2,bw-4),hn=(Hh-pb-16)*w.n/max,hl=(Hh-pb-16)*w.l/max,lab=new Date(k).toLocaleDateString(undefined,{month:"short",day:"numeric"}),tot=w.l+w.n;
+    s+=`<rect x="${x}" y="${Hh-pb-hn}" width="${bwid}" height="${hn}" fill="var(--moss)"><title>Week of ${lab}: ${w.n} in the dark</title></rect><rect x="${x}" y="${Hh-pb-hn-hl}" width="${bwid}" height="${hl}" fill="var(--accent)"><title>Week of ${lab}: ${w.l} in shooting light</title></rect>`;
+    if(tot)s+=`<text class="val" x="${x+bwid/2}" y="${Hh-pb-hn-hl-4}" text-anchor="middle">${Math.round(w.l/tot*100)}%</text>`;
+    if(weeks.length<=12||i%2===0)s+=`<text x="${x+bwid/2}" y="${Hh-pb+14}" text-anchor="middle">${lab}</text>`});
+  s+=`<rect x="${pl}" y="${Hh-12}" width="10" height="10" fill="var(--accent)"></rect><text x="${pl+14}" y="${Hh-3}">shooting light (% on top)</text><rect x="${pl+170}" y="${Hh-12}" width="10" height="10" fill="var(--moss)"></rect><text x="${pl+184}" y="${Hh-3}">dark</text>`;
+  el.innerHTML=s+"</svg>";
+  const share=ws=>{const l=ws.reduce((a,w)=>a+w[1].l,0),t=ws.reduce((a,w)=>a+w[1].l+w[1].n,0);return t?Math.round(l/t*100):null};
+  const a=share(weeks.slice(-2)),b=share(weeks.slice(0,Math.max(1,weeks.length-2)));
+  $("rutNote").textContent=a!=null&&b!=null?`For the current selection, ${a}% of sightings in the last 2 weeks were in shooting light, against ${b}% before that. A rising share means more daylight movement as the rut builds.`:"Sightings each week, split by shooting light and dark.";
+}
+function heatChart(rows){
+  const el=$("heatChart"),cams=count(rows,r=>r.camera).map(c=>c[0]);if(!cams.length){el.innerHTML='<div class="empty">No data yet</div>';return}
+  const m=new Map();rows.forEach(r=>{const k=r.camera+"|"+r._d.getHours();m.set(k,(m.get(k)||0)+1)});const max=Math.max(1,...m.values());
+  let h=`<div class="heat" style="grid-template-columns:110px repeat(24,minmax(14px,1fr))"><span></span>${Array.from({length:24},(_,i)=>`<span style="text-align:center">${i%3===0?fmtHour(i):""}</span>`).join("")}`;
+  cams.forEach(c=>{h+=`<span class="lab" title="${esc(c)}">${esc(c)}</span>`;for(let i=0;i<24;i++){const n=m.get(c+"|"+i)||0;h+=`<span class="c" style="opacity:${n?(.12+.88*n/max).toFixed(2):.04}" title="${esc(c)} ${fmtHour(i)}: ${n}"></span>`}});
+  el.innerHTML=h+"</div>";
+}
+function calChart(){
+  const el=$("calChart"),nb=[...namedBucks().entries()];if(!nb.length){el.innerHTML='<div class="empty">No named bucks yet.</div>';return}
+  const latest=all.reduce((a,r)=>r._d>a?r._d:a,new Date(0)),days=[];for(let i=29;i>=0;i--){const d=new Date(latest);d.setHours(12,0,0,0);d.setDate(d.getDate()-i);days.push(d)}
+  const rows=nb.map(([name,rs])=>{const m=new Map();rs.forEach(r=>{const k=dayKey(r._d);const v=m.get(k)||{l:0,n:0,c:new Set()};legal(r._d)?v.l++:v.n++;v.c.add(r.camera);m.set(k,v)});return{name,m,last:rs.reduce((a,r)=>r._d>a?r._d:a,new Date(0))}}).sort((a,b)=>b.last-a.last);
+  let h=`<div class="heat" style="grid-template-columns:150px repeat(30,minmax(14px,1fr))"><span></span>${days.map((d,i)=>`<span style="text-align:center">${i%5===0||i===29?d.getDate():""}</span>`).join("")}`;
+  rows.forEach(r=>{h+=`<span class="lab" title="${esc(r.name)}">${esc(r.name)}</span>`;days.forEach(d=>{const v=r.m.get(dayKey(d));h+=v?`<span class="c" style="background:${v.l?"var(--accent)":"var(--moss)"}" title="${esc(r.name)} ${d.toLocaleDateString(undefined,{month:"short",day:"numeric"})}: ${v.l+v.n} pics${v.l?`, ${v.l} in shooting light`:""} at ${esc([...v.c].join(", "))}"></span>`:`<span class="c" style="opacity:.06"></span>`})});
+  el.innerHTML=h+`</div><div style="font-size:12px;color:var(--muted);margin-top:4px">Days ending ${latest.toLocaleDateString(undefined,{month:"short",day:"numeric"})}, the newest photo in the log.</div>`;
 }
 
 function view(){if(!filter)return all;if(filter==="@Doe")return all.filter(r=>r.kind==="Doe");if(filter==="@Fawn")return all.filter(r=>r.kind==="Fawn");if(filter==="@Buck")return all.filter(r=>r.kind==="Buck");if(filter==="@Unnamed")return all.filter(r=>r.kind==="Buck"&&!r.name);return all.filter(r=>(r.name||"")===filter)}
@@ -262,7 +426,7 @@ function render(){
   const sel=$("deerFilter");sel.innerHTML='<option value="">All deer</option>'+[["@Buck","All bucks"],["@Doe","Does (group)"],["@Fawn","Fawns (group)"],["@Unnamed","Unidentified bucks"]].map(([v,l])=>`<option value="${v}"${v===filter?" selected":""}>${l}</option>`).join("")+names.map(n=>`<option${n===filter?" selected":""}>${esc(n)}</option>`).join("");
   
   const rows=view();
-  bucks();hourChart(rows);planner();
+  bucks();hourChart(rows);planner();hitList();rutChart(rows);heatChart(rows);calChart();renderForecast();
   hbars($("camChart"),count(rows,r=>r.camera));
   hbars($("moonChart"),count(rows,r=>moonPhase(r._d),MOONS));
   hbars($("windChart"),count(rows,r=>r.wind,WINDS));
@@ -293,7 +457,7 @@ try{const s=JSON.parse(localStorage.getItem("plan")||"{}");["p_win","p_wind","p_
     all=data.sightings.map(r=>({...r,_d:parseWhen(r.when)})).filter(r=>!isNaN(r._d));
     profiles={};data.bucks.forEach(v=>{if(v&&v.name)profiles[v.name]=v});
     const g=document.getElementById("gen");if(g)g.textContent="Updated "+new Date(data.generated).toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
-    render()}catch(e){$("loadMsg").textContent="Couldn't load the data file."}
+    render();loadForecast()}catch(e){console.error(e);$("loadMsg").textContent="Couldn't load the data file."}
 })();
 </script>
 
