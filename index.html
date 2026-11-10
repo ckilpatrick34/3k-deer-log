@@ -68,13 +68,6 @@ td button{padding:2px 8px;font-size:12px}
 details summary{cursor:pointer;font-weight:600}
 .thumb{width:72px;height:54px;object-fit:cover;border-radius:4px;display:block;cursor:zoom-in;background:var(--bg)}
 .buck .pic{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:6px;background:var(--bg);display:block}
-.gal{position:fixed;inset:0;background:rgba(10,12,8,.97);z-index:19;overflow:auto;padding:16px}
-.gal header{display:flex;justify-content:space-between;align-items:center;gap:8px;color:#e7e5da;max-width:1100px;margin:0 auto 12px}
-.gal header h2{margin:0;font-size:18px;color:#e7e5da}
-.gal header button{background:#e7e5da;color:#1d2117;border:0;border-radius:6px;padding:8px 14px;font:inherit;cursor:pointer}
-.gal .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;max-width:1100px;margin:0 auto}
-.gal figure{margin:0}.gal figure img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:6px;cursor:zoom-in;display:block;background:#222}
-.gal figcaption{color:#c9c7bb;font-size:12px;margin-top:3px}
 .buck .more{font-size:13px;color:var(--moss);text-decoration:underline;cursor:pointer}
 .lightbox{position:fixed;inset:0;background:rgba(10,12,8,.88);display:grid;place-items:center;z-index:20;padding:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));cursor:zoom-out}
 .lightbox img{max-width:100%;max-height:85vh;border-radius:6px}
@@ -504,16 +497,6 @@ function render(){
   document.querySelectorAll("img.thumb").forEach(im=>im.onclick=e=>{e.stopPropagation();openBox(im.src,im.dataset.cap||"")});
   
 }
-function openGallery(name){
-  const prof=profiles[name]||{};
-  const rs=all.filter(r=>r.name===name&&r.photo).sort((a,b)=>b._d-a._d);
-  const items=rs.map(r=>({src:r.photo,cap:name+" · "+fmtWhen(r._d)+" · "+r.camera}));
-  if(prof.photo&&!items.some(i=>i.src===prof.photo))items.unshift({src:prof.photo,cap:name+" · cover"+(prof.when?" · "+fmtWhen(parseWhen(prof.when)):"")});
-  const d=document.createElement("div");d.className="gal";d.setAttribute("role","dialog");d.setAttribute("aria-label",name+" photos");
-  d.innerHTML=`<header><h2>${esc(name)} · ${items.length} photo${items.length===1?"":"s"}</h2><button type="button">Close</button></header><div class="grid">${items.map((it,i)=>`<figure><img src="${esc(it.src)}" loading="lazy" alt="${esc(it.cap)}" data-i="${i}"><figcaption>${esc(it.cap.split(" · ").slice(1).join(" · "))}</figcaption></figure>`).join("")}</div>`;
-  const close=()=>{d.remove();removeEventListener("keydown",k)};const k=e=>{if(e.key==="Escape"&&!document.querySelector(".lightbox"))close()};
-  d.querySelector("header button").onclick=close;d.querySelectorAll("img[data-i]").forEach(im=>im.onclick=()=>{const it=items[+im.dataset.i];openBox(it.src,it.cap)});
-  addEventListener("keydown",k);document.body.append(d)}
 function openBox(src,cap){const d=document.createElement("div");d.className="lightbox";d.setAttribute("role","dialog");
   const im=document.createElement("img");const p=document.createElement("p");
   im.src=src;im.alt=cap;p.textContent=cap+" · tap to close";
