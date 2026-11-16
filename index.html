@@ -94,6 +94,13 @@ details summary{cursor:pointer;font-weight:600}
 .subgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
 @media (max-width:760px){.subgrid{grid-template-columns:minmax(0,1fr)}}
 .pill.gone{background:var(--line);color:var(--muted)}
+.review-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:12px 0}
+.review-photos{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.review-photos figure{margin:0}
+.review-photos img{display:block;width:100%;height:clamp(130px,25vw,315px);object-fit:contain;background:var(--bg);border:1px solid var(--line);border-radius:8px}
+.review-photos figcaption{margin-top:5px;color:var(--muted);font-size:13px}
+.review-controls{display:flex;align-items:end;flex-wrap:wrap;gap:8px;margin-top:12px}
+.review-controls label{display:grid;gap:4px}
 </style>
 </head><body>
 
@@ -109,6 +116,27 @@ details summary{cursor:pointer;font-weight:600}
       <select id="deerFilter"><option value="">All deer</option></select>
     </div>
   </header>
+
+  <details class="card" id="buckReview">
+    <summary>Review buck matches <span id="reviewCount"></span></summary>
+    <p class="note">Confirm a match, pick another buck, or mark the encounter unknown. Named-buck stats count confirmed sightings.</p>
+    <div class="review-toolbar">
+      <label for="reviewStatus">Show</label>
+      <select id="reviewStatus"><option value="pending">Needs review</option><option value="reviewed">Reviewed</option><option value="all">All candidates</option></select>
+      <label for="reviewBuck">Buck</label>
+      <select id="reviewBuck"><option value="">All names</option></select>
+      <button id="reviewPrev" type="button">Previous</button>
+      <button id="reviewNext" type="button">Next</button>
+      <span id="reviewPosition"></span>
+    </div>
+    <div id="reviewSighting"></div>
+    <div class="review-toolbar">
+      <button id="reviewExport" type="button" disabled>Download corrections</button>
+      <a href="https://github.com/ckilpatrick34/3k-deer-log/edit/main/buck-corrections.json">Publish on GitHub</a>
+    </div>
+    <p class="note">Draft corrections preview here on this browser. To share them, replace the GitHub corrections file with the downloaded JSON and commit it.</p>
+    <p class="note" id="reviewMessage" role="status"></p>
+  </details>
 
   <section class="card" id="fcCard">
     <div style="display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline;justify-content:space-between">
@@ -514,12 +542,155 @@ try{const s=JSON.parse(localStorage.getItem("plan")||"{}");["p_win","p_wind","p_
 ["p_date","p_win","p_wind","p_temp"].forEach(k=>$(k).addEventListener("input",()=>{try{localStorage.setItem("plan",JSON.stringify({p_win:$("p_win").value,p_wind:$("p_wind").value,p_temp:$("p_temp").value}))}catch{};planner()}));
 
 
-(async()=>{
-  try{const res=await fetch("data.json?"+Date.now());const data=await res.json();
-    const rowsAll=data.sightings.map(r=>({...r,_d:parseWhen(r.when)})).filter(r=>!isNaN(r._d));all=rowsAll.filter(r=>!NONDEER.has(r.kind));hogs=rowsAll.filter(r=>r.kind==="Hog");preds=rowsAll.filter(r=>r.kind==="Predator");harvests=data.harvests||[];
-    profiles={};data.bucks.forEach(v=>{if(v&&v.name)profiles[v.name]=v});
-    const g=document.getElementById("gen");if(g)g.textContent="Updated "+new Date(data.generated).toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
-    render();loadForecast()}catch(e){console.error(e);$("loadMsg").textContent="Couldn't load the data file."}
+const draftKey = "3k-deer-log:buck-corrections";
+let sourceRows = [], published = new Map(), drafts = new Map(), candidates = [];
+let reviewIndex = 0, correctionsAvailable = false;
+const acceptedName = (row, decisions) => decisions.has(row.id)
+  ? decisions.get(row.id)
+  : row.source === "carson" ? row.name : "";
+const decisionsForPreview = () => new Map([...published, ...drafts]);
+
+function readDecisions(value) {
+  if (!value || Array.isArray(value) || typeof value !== "object" ||
+      Object.values(value).some(name => typeof name !== "string")) {
+    throw new Error("Invalid corrections file");
+  }
+  return new Map(Object.entries(value));
+}
+
+function applyBuckDecisions() {
+  const decisions = decisionsForPreview();
+  all = sourceRows.filter(row => !NONDEER.has(row.kind)).map(row =>
+    row.kind === "Buck" ? {...row, name: acceptedName(row, decisions)} : row
+  );
+  if (filter && !filter.startsWith("@") && !all.some(row => row.name === filter)) filter = "";
+  render();
+  renderReview();
+}
+
+function renderReview() {
+  const status = $("reviewStatus").value;
+  const buck = $("reviewBuck").value;
+  const decisions = decisionsForPreview();
+  const pending = row => !decisions.has(row.id) && row.source !== "carson";
+  const rows = candidates.filter(row =>
+    (!buck || row.name === buck || acceptedName(row, decisions) === buck) &&
+    (status === "all" || (status === "pending" ? pending(row) : !pending(row)))
+  );
+  reviewIndex = Math.max(0, Math.min(reviewIndex, rows.length - 1));
+  $("reviewCount").textContent = `(${candidates.filter(pending).length} pending)`;
+  $("reviewPosition").textContent = rows.length ? `${reviewIndex + 1} of ${rows.length}` : "";
+  $("reviewPrev").disabled = reviewIndex === 0;
+  $("reviewNext").disabled = reviewIndex + 1 >= rows.length;
+  $("reviewExport").disabled = !correctionsAvailable || !drafts.size;
+  const target = $("reviewSighting");
+  const row = rows[reviewIndex];
+  if (!row) {
+    target.textContent = "No sightings in this view.";
+    return;
+  }
+  const names = [...new Set([...Object.keys(profiles), ...candidates.map(r => r.name).filter(Boolean)])].sort();
+  const current = acceptedName(row, decisions);
+  const evidence = (photo, label) => `<figure>${photo
+    ? `<a href="${esc(photo)}" target="_blank" rel="noopener"><img src="${esc(photo)}" alt="${esc(label)}"></a>`
+    : '<p class="note">No photo in the log. Check the Reveal camera roll using the time and frame notes.</p>'}
+    <figcaption>${esc(label)}</figcaption></figure>`;
+  target.innerHTML = `<h3>${esc(row.camera)} · ${fmtWhen(row._d)}</h3>
+    <p class="note">${row.name ? `Suggested match <strong>${esc(row.name)}</strong>. ` : ""}
+    ${pending(row) ? "Needs review" : `Reviewed as <strong>${esc(current || "Unknown buck")}</strong>`}
+    ${drafts.has(row.id) ? " (browser draft)" : ""}.</p>
+    <p class="note">${esc(row.notes)}</p>
+    <div class="review-photos">${evidence(row.photo, "Encounter photo")}<div id="reviewReference"></div></div>
+    <div class="review-controls">
+      <button id="reviewConfirm" type="button" ${!row.name || !correctionsAvailable ? "disabled" : ""}>Confirm suggested match</button>
+      <label for="reviewName">Compare with another buck
+        <select id="reviewName"><option value="">Choose a buck</option>${names.map(name => `<option value="${esc(name)}">${esc(name)}</option>`).join("")}</select>
+      </label>
+      <button id="reviewReassign" type="button" disabled>Reassign</button>
+      <button id="reviewUnknown" type="button" ${!correctionsAvailable ? "disabled" : ""}>Mark unknown</button>
+    </div>`;
+  const picker = $("reviewName");
+  function showReference() {
+    const name = picker.value || row.name;
+    $("reviewReference").innerHTML = name ? evidence(profiles[name]?.photo, `Profile photo for ${name}`) : "";
+    $("reviewReassign").disabled = !picker.value || !correctionsAvailable;
+  }
+  picker.onchange = showReference;
+  showReference();
+  function save(name) {
+    const next = new Map(drafts);
+    if (published.has(row.id) && published.get(row.id) === name) next.delete(row.id);
+    else next.set(row.id, name);
+    try {
+      localStorage.setItem(draftKey, JSON.stringify(Object.fromEntries(next)));
+    } catch {
+      $("reviewMessage").textContent = "Could not save this browser draft.";
+      return;
+    }
+    drafts = next;
+    applyBuckDecisions();
+    $("reviewMessage").textContent = `Saved as ${name || "Unknown buck"} in this browser.`;
+  }
+  $("reviewConfirm").onclick = () => save(row.name);
+  $("reviewReassign").onclick = () => save(picker.value);
+  $("reviewUnknown").onclick = () => save("");
+}
+
+$("reviewStatus").onchange = $("reviewBuck").onchange = () => { reviewIndex = 0; renderReview(); };
+$("reviewPrev").onclick = () => { reviewIndex--; renderReview(); };
+$("reviewNext").onclick = () => { reviewIndex++; renderReview(); };
+$("reviewExport").onclick = () => {
+  const json = JSON.stringify(Object.fromEntries([...decisionsForPreview()].sort()), null, 2) + "\n";
+  const url = URL.createObjectURL(new Blob([json], {type:"application/json"}));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "buck-corrections.json";
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+
+(async () => {
+  try {
+    const [res, corrections] = await Promise.all([
+      fetch("data.json", {cache:"no-store"}),
+      fetch("buck-corrections.json", {cache:"no-store"}).catch(() => null)
+    ]);
+    if (!res.ok) throw new Error("Could not load sightings");
+    const data = await res.json();
+    try {
+      if (!corrections?.ok) throw new Error("Could not load published corrections");
+      published = readDecisions(await corrections.json());
+      correctionsAvailable = true;
+      drafts = readDecisions(JSON.parse(localStorage.getItem(draftKey) || "{}"));
+      for (const [id, name] of drafts) {
+        if (published.get(id) === name) drafts.delete(id);
+      }
+      localStorage.setItem(draftKey, JSON.stringify(Object.fromEntries(drafts)));
+    } catch {
+      $("reviewMessage").textContent = correctionsAvailable
+        ? "Could not restore this browser's drafts."
+        : "Could not load published corrections. Reload before reviewing sightings.";
+    }
+    sourceRows = data.sightings.map(r => ({...r, _d:parseWhen(r.when)})).filter(r => !isNaN(r._d));
+    hogs = sourceRows.filter(r => r.kind === "Hog");
+    preds = sourceRows.filter(r => r.kind === "Predator");
+    harvests = data.harvests || [];
+    profiles = Object.fromEntries(data.bucks.filter(v => v?.name).map(v => [v.name, v]));
+    candidates = sourceRows.filter(r => r.kind === "Buck" && r.id &&
+      (r.name || r.photo || published.has(r.id) || drafts.has(r.id)))
+      .sort((a,b) => Number(Boolean(b.photo)) - Number(Boolean(a.photo)) || b._d - a._d);
+    for (const name of [...new Set([...Object.keys(profiles), ...candidates.map(row => row.name).filter(Boolean)])].sort()) {
+      $("reviewBuck").add(new Option(name, name));
+    }
+    $("gen").textContent = "Updated " + new Date(data.generated).toLocaleString(undefined,
+      {month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
+    applyBuckDecisions();
+    loadForecast();
+  } catch (e) {
+    console.error(e);
+    const message = $("loadMsg");
+    if (message) message.textContent = "Couldn't load the data file.";
+  }
 })();
 </script>
 
