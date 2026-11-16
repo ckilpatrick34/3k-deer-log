@@ -3,6 +3,8 @@
 <title>3K Deer Log</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bitter:wght@600;700&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
 /* Layout: field-notebook tool. Summary of each buck up top, charts in a two-column grid, log + entry form below. */
 :root{
@@ -79,6 +81,12 @@ details summary{cursor:pointer;font-weight:600}
 .fcday .meta{font-size:12px;color:var(--muted)}
 .sit{background:var(--panel);border-radius:8px;padding:10px;display:grid;gap:4px;font-size:13px}
 .sit.past{opacity:.5}
+.go{display:inline-block;font-family:var(--mono);font-size:11px;font-weight:600;padding:1px 7px;border-radius:99px;margin:2px 4px 2px 0}
+.go.GO{background:var(--moss);color:var(--panel)}.go.MAYBE{background:var(--accent-soft);color:var(--accent)}.go.NO{background:var(--line);color:var(--muted)}
+#map{height:460px;border-radius:10px;border:1px solid var(--line)}
+@media (max-width:640px){#map{height:360px}}
+.gng{display:grid;gap:3px}.gng div{font-size:12px;color:var(--muted)}
+
 .sit .wx{font-family:var(--mono);font-size:12px}
 .sit .arrow{display:inline-block;width:1em;text-align:center}
 .sit button{justify-self:start;font-size:12px;padding:3px 9px;margin-top:2px}
@@ -117,6 +125,15 @@ details summary{cursor:pointer;font-weight:600}
     </div>
     <p class="note" id="fcNote">Loading the forecast…</p>
     <div id="fcDays" class="fcdays"></div>
+  </section>
+
+  <section class="card" id="mapCard">
+    <div style="display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline;justify-content:space-between">
+      <h2>Property map</h2>
+      <span style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--muted)">Sit <select id="mapSit"></select></span>
+    </div>
+    <p class="note" id="mapNote">Stands show here once they're placed in the Deer Log editor.</p>
+    <div id="map" hidden></div>
   </section>
 
   <section class="card" id="planCard">
@@ -320,18 +337,20 @@ function renderForecast(){
       const o=oddsFor(date,wi,wd,t);
       const score=o.res.reduce((a,r)=>a+r.lam*((r.prof.score_high||100)/100),0);
       const past=new Date(`${day}T${String(h+3).padStart(2,"0")}:00`)<now;
-      const sit={k,lab,wi,day,t,deg,wd,ws,rain,inHg:(p*.02953).toFixed(2),trend,o,score,past};
+      const t24=i>=24?H.temperature_2m[i-24]:null,front=t24!=null&&t24-H.temperature_2m[i]>=8?`front: ${Math.round(t24-H.temperature_2m[i])}°F cooler than yesterday`:trend==="rising"&&p0!=null&&i>=12&&H.surface_pressure[i-12]>p0?"pressure rising after a low":"";
+      const sit={k,lab,wi,day,t,deg,wd,ws,rain,inHg:(p*.02953).toFixed(2),trend,o,score,past,front};sit.gng=goNoGo(sit);
       if(!past&&(!best||score>best.score))best=sit;return sit}).filter(Boolean);
     days.push({k,day,date,rise,set,sits});
   }
   $("fcNote").textContent=best?`Best sit of the next 3 days: ${best.date?"":""}${new Date(best.day+"T12:00").toLocaleDateString(undefined,{weekday:"long"})} ${best.lab.toLowerCase()}${best.o.stands[0]?` at ${best.o.stands[0][0]}`:""}. Odds use each buck's history under the forecast wind, temperature, time and moon.`:"";
+  window.__sits=days.flatMap(d=>d.sits);renderMap();
   $("fcDays").innerHTML=days.map(d=>`<div class="fcday${best&&best.k===d.k?" top":""}">
     <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><h3>${d.date.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"})}</h3>${best&&best.k===d.k?'<span class="pill hot">best day</span>':""}</div>
     <div class="meta">Shooting light ${fmtT(new Date(d.rise-18e5))} – ${fmtT(new Date(+d.set+18e5))} · ${moonPhase(d.date)} moon, ${moonIll(d.date)}% lit</div>
     ${d.sits.map(s=>{const top=s.o.res.filter(r=>r.inWin).slice(0,3);const st=s.o.stands[0];return `<div class="sit${s.past?" past":""}">
       <div class="eyebrow">${s.lab}${best===s?" · best sit":""}${s.past?" · over":""}</div>
       <div class="wx"><span class="arrow" style="transform:rotate(${s.deg}deg)" aria-hidden="true">↓</span>${s.wd} ${s.ws} mph · ${s.t}°F${s.rain!=null?` · ${s.rain}% rain`:""} · ${s.inHg} in ${s.trend}</div>
-      <div>Best stand: <b>${esc(st?st[0]:"—")}</b></div>
+      <div class="gng">${s.gng.slice(0,4).map(x=>`<div><span class="go ${x.v}">${x.v}</span><b style="color:var(--ink)">${esc(x.cam)}</b>${x.why.length?" · "+x.why.slice(0,2).map(esc).join("; "):""}</div>`).join("")}</div>
       <div style="color:var(--muted)">${top.length?top.map(r=>`${esc(r.name)} ${pct(r.prob)}`).join(" · "):"No named bucks seen in this window yet"}</div>
       <button type="button" data-plan="${s.day}|${s.wi}|${s.wd}|${s.t}">Open in planner</button></div>`}).join("")}
   </div>`).join("");
@@ -339,6 +358,57 @@ function renderForecast(){
 }
 $("fcHere").onclick=()=>{if(!navigator.geolocation){$("fcNote").textContent="This browser can't share its location.";return}
   navigator.geolocation.getCurrentPosition(p=>{LOC={lat:+p.coords.latitude.toFixed(3),lon:+p.coords.longitude.toFixed(3),label:"your location"};try{localStorage.setItem("loc",JSON.stringify(LOC))}catch{};sunCache.clear();loadForecast();render()},()=>{$("fcNote").textContent="Location wasn't shared, so the forecast stays on "+LOC.label+"."})};
+
+// ---- Go / No-Go per stand, and the property map ----
+let STANDS={};
+const VORD={GO:0,MAYBE:1,NO:2};
+function standCams(){const cut=Date.now()-30*864e5,c=new Set(Object.keys(STANDS));all.forEach(r=>{if(+r._d>=cut&&r.camera)c.add(r.camera)});return[...c]}
+function goNoGo(s){
+  const w=new Map(s.o.stands.map(([c,v])=>[c,v.w])),max=Math.max(0,...w.values());
+  return standCams().map(cam=>{
+    const info=STANDS[cam]||{},wt=w.get(cam)||0,why=[],warn=[];
+    const day=all.filter(r=>r.camera===cam&&r.kind==="Buck"&&r.wind&&legal(r._d)),hits=day.filter(r=>r.wind===s.wd).length;
+    const last=all.filter(r=>r.camera===cam).reduce((m,r)=>r._d>m?r._d:m,new Date(0)),idle=(Date.now()-last)/864e5;
+    const top=s.o.res.filter(r=>r.stand===cam&&r.inWin).slice(0,2);
+    let v;
+    if((info.bad_winds||[]).includes(s.wd)){v="NO";why.push(`${s.wd} wind is on your bad-wind list here`)}
+    else if(!wt){v="NO";why.push("no named bucks use it this time of day")}
+    else{
+      if(day.length>=6&&!hits)warn.push(`no bucks seen here in daylight on a ${s.wd} wind`);
+      if(s.ws>=15)warn.push(`windy (${s.ws} mph)`);
+      if(s.rain!=null&&s.rain>=60)warn.push(`${s.rain}% rain`);
+      if(wt<.35*max)warn.push("well behind the best stand");
+      v=!warn.length&&wt>=.5*max?"GO":"MAYBE";
+      if(hits>=3)why.push(`${hits} daylight buck visits on a ${s.wd} wind`);
+      if(top.length)why.push(top.map(r=>`${r.name} ${pct(r.prob)}`).join(", "));
+    }
+    if(s.front)why.push(s.front);
+    if(idle>3&&isFinite(idle))warn.push(`camera quiet ${Math.floor(idle)} days`);
+    return{cam,v,wt,why:[...why,...warn],top}}).sort((a,b)=>VORD[a.v]-VORD[b.v]||b.wt-a.wt);
+}
+let map=null,mapLayer=null;
+function renderMap(){
+  const placed=Object.entries(STANDS).filter(([,v])=>isFinite(v.lat)&&isFinite(v.lon));
+  const sits=(window.__sits||[]).filter(s=>!s.past),sel=$("mapSit");
+  if(sel.options.length!==sits.length){const old=sel.value;sel.innerHTML=sits.map((s,i)=>`<option value="${i}">${new Date(s.day+"T12:00").toLocaleDateString(undefined,{weekday:"short"})} ${s.lab.split(" ")[0].toLowerCase()}</option>`).join("");if(old&&+old<sits.length)sel.value=old}
+  if(!placed.length||!window.L){$("map").hidden=true;$("mapNote").textContent=window.L?"Stands show here once they're placed in the Deer Log editor (Edit → Place stands).":"The map couldn't load.";return}
+  $("map").hidden=false;
+  if(!map){map=L.map("map",{scrollWheelZoom:false});
+    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{maxZoom:19,attribution:"Imagery © Esri"}).addTo(map);
+    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",{maxZoom:19}).addTo(map);
+    const home=placed.filter(([c])=>c!=="Starkville");map.fitBounds(L.latLngBounds((home.length?home:placed).map(([,v])=>[v.lat,v.lon])).pad(.4),{maxZoom:17})}
+  if(mapLayer)mapLayer.remove();mapLayer=L.layerGroup().addTo(map);
+  const s=sits[+sel.value||0],g=s?new Map(goNoGo(s).map(x=>[x.cam,x])):new Map();
+  $("mapNote").textContent=s?`${s.lab} ${new Date(s.day+"T12:00").toLocaleDateString(undefined,{weekday:"long"})}: wind from the ${s.wd} at ${s.ws} mph. The shaded fan is where your scent drifts from each stand.`:"No forecast loaded, so stands show without a verdict.";
+  const col={GO:"#4f9d3a",MAYBE:"#e08a3c",NO:"#8a8a80"};
+  placed.forEach(([cam,v])=>{const x=g.get(cam),c=col[x?x.v:"NO"];
+    if(s){const R=6378137,len=250,to=(s.deg+180)*Math.PI/180,pt=a=>[v.lat+len*Math.cos(a)/R*180/Math.PI,v.lon+len*Math.sin(a)/(R*Math.cos(v.lat*Math.PI/180))*180/Math.PI];
+      L.polygon([[v.lat,v.lon],pt(to-.35),pt(to),pt(to+.35)],{color:c,weight:1,fillOpacity:.18,interactive:false}).addTo(mapLayer)}
+    L.circleMarker([v.lat,v.lon],{radius:9,color:"#fff",weight:2,fillColor:c,fillOpacity:1}).addTo(mapLayer)
+      .bindTooltip(`${cam}${x?" · "+x.v:""}`,{permanent:true,direction:"right",offset:[8,0]})
+      .bindPopup(`<b>${esc(cam)}</b>${x?` <span class="go ${x.v}">${x.v}</span><br>${x.why.map(esc).join("<br>")}`:""}${v.note?`<br><i>${esc(v.note)}</i>`:""}${(v.bad_winds||[]).length?`<br>Bad winds: ${esc(v.bad_winds.join(", "))}`:""}`)});
+}
+$("mapSit").onchange=renderMap;
 
 // ---- Hit list, weekly daylight trend, camera-by-hour, buck calendar ----
 function namedBucks(){const hv=harvestedNames(),m=new Map();all.forEach(r=>{if(r.name&&r.kind==="Buck"&&!hv.has(r.name)){(m.get(r.name)||m.set(r.name,[]).get(r.name)).push(r)}});return m}
@@ -516,7 +586,7 @@ try{const s=JSON.parse(localStorage.getItem("plan")||"{}");["p_win","p_wind","p_
 
 (async()=>{
   try{const res=await fetch("data.json?"+Date.now());const data=await res.json();
-    const rowsAll=data.sightings.map(r=>({...r,_d:parseWhen(r.when)})).filter(r=>!isNaN(r._d));all=rowsAll.filter(r=>!NONDEER.has(r.kind));hogs=rowsAll.filter(r=>r.kind==="Hog");preds=rowsAll.filter(r=>r.kind==="Predator");harvests=data.harvests||[];
+    const rowsAll=data.sightings.map(r=>({...r,_d:parseWhen(r.when)})).filter(r=>!isNaN(r._d));all=rowsAll.filter(r=>!NONDEER.has(r.kind));hogs=rowsAll.filter(r=>r.kind==="Hog");preds=rowsAll.filter(r=>r.kind==="Predator");harvests=data.harvests||[];STANDS={};(data.stands||[]).forEach(v=>{if(v&&v.camera)STANDS[v.camera]=v});
     profiles={};data.bucks.forEach(v=>{if(v&&v.name)profiles[v.name]=v});
     const g=document.getElementById("gen");if(g)g.textContent="Updated "+new Date(data.generated).toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
     render();loadForecast()}catch(e){console.error(e);$("loadMsg").textContent="Couldn't load the data file."}
