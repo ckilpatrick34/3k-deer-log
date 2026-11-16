@@ -139,6 +139,14 @@ a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 <div class="wrap">
   <header class="masthead">
     <div><p class="brand">3K Property</p><h1>Deer Log</h1><p id="gen"></p></div>
+    <div class="controls">
+      <label for="propertyFilter">Location</label>
+      <select id="propertyFilter">
+        <option value="">All locations</option>
+        <option value="camp">Camp</option>
+        <option value="starkville">Starkville</option>
+      </select>
+    </div>
   </header>
   <nav class="nav" aria-label="Deer Log">
     <a href="#overview">Overview</a>
@@ -580,9 +588,9 @@ function render(){
   $("patternDeerFilter").value = filter;
   renderSightings(rows);
   const counts = [
-    ["Recorded sightings", sourceRows.filter(row => !NONDEER.has(row.kind)).length],
+    ["Recorded sightings", sourceRows.filter(row => !NONDEER.has(row.kind) && inProperty(row)).length],
     ["Confirmed buck IDs", new Set(all.filter(row => row.kind === "Buck" && row.name).map(row => row.name)).size],
-    ["Nov 7–16 sightings", sourceRows.filter(row => !NONDEER.has(row.kind) && inPeriod(row, "recent")).length]
+    ["Nov 7–16 sightings", sourceRows.filter(row => !NONDEER.has(row.kind) && inProperty(row) && inPeriod(row, "recent")).length]
   ];
   $("overviewMetrics").innerHTML = counts.map(([label, value]) =>
     `<div class="metric"><strong>${value.toLocaleString()}</strong><span>${label}</span></div>`
@@ -648,6 +656,24 @@ try{const s=JSON.parse(localStorage.getItem("plan")||"{}");["p_win","p_wind","p_
 
 const draftKey = "3k-deer-log:buck-corrections";
 let belowMinimum = new Set();
+const propertyOf = camera => String(camera || "").trim().toLowerCase() === "starkville" ? "starkville" : "camp";
+const inProperty = row => !$("propertyFilter").value || propertyOf(row.camera) === $("propertyFilter").value;
+function buckNamesFor(property) {
+  const names = new Set();
+  for (const profile of Object.values(profiles)) {
+    if (profile.camera && propertyOf(profile.camera) === property) names.add(profile.name);
+  }
+  for (const row of candidates) {
+    if (row.name && propertyOf(row.camera) === property && !profiles[row.name]?.camera) names.add(row.name);
+  }
+  return names;
+}
+$("propertyFilter").onchange = () => {
+  filter = "";
+  sightingPage = reviewIndex = 0;
+  $("reviewBuck").value = $("sightingCamera").value = "";
+  applyBuckDecisions();
+};
 let sourceRows = [], published = new Map(), drafts = new Map(), candidates = [];
 let reviewIndex = 0, correctionsAvailable = false;
 const acceptedName = (row, decisions) => decisions.has(row.id)
@@ -665,7 +691,7 @@ function readDecisions(value) {
 
 function applyBuckDecisions() {
   const decisions = decisionsForPreview();
-  all = sourceRows.filter(row => !NONDEER.has(row.kind)).map(row =>
+  all = sourceRows.filter(row => !NONDEER.has(row.kind) && inProperty(row)).map(row =>
     row.kind === "Buck" ? {...row, name: acceptedName(row, decisions)} : row
   ).filter(row => row.kind !== "Buck" || !belowMinimum.has(row.name));
   if (filter && !filter.startsWith("@") && !all.some(row => row.name === filter)) filter = "";
@@ -678,13 +704,14 @@ function renderReview() {
   const buck = $("reviewBuck").value;
   const decisions = decisionsForPreview();
   const pending = row => !decisions.has(row.id) && row.source !== "carson";
-  const rows = candidates.filter(row =>
+  const propertyCandidates = candidates.filter(inProperty);
+  const rows = propertyCandidates.filter(row =>
     inPeriod(row, $("reviewPeriod").value) &&
     (!buck || row.name === buck || acceptedName(row, decisions) === buck) &&
     (status === "all" || (status === "pending" ? pending(row) : !pending(row)))
   );
   reviewIndex = Math.max(0, Math.min(reviewIndex, rows.length - 1));
-  $("reviewCount").textContent = `(${candidates.filter(pending).length} pending)`;
+  $("reviewCount").textContent = `(${propertyCandidates.filter(pending).length} pending)`;
   $("reviewPosition").textContent = rows.length ? `${reviewIndex + 1} of ${rows.length}` : "";
   $("reviewPrev").disabled = reviewIndex === 0;
   $("reviewNext").disabled = reviewIndex + 1 >= rows.length;
@@ -695,7 +722,8 @@ function renderReview() {
     target.textContent = "No sightings in this view.";
     return;
   }
-  const names = [...new Set([...Object.keys(profiles), ...candidates.map(r => r.name).filter(Boolean)])].sort();
+  const names = [...buckNamesFor(propertyOf(row.camera))].sort();
+  const canConfirm = names.includes(row.name);
   const current = acceptedName(row, decisions);
   const evidence = (photo, label) => `<figure>${photo
     ? `<a href="${esc(photo)}" target="_blank" rel="noopener"><img src="${esc(photo)}" alt="${esc(label)}"></a>`
@@ -708,7 +736,7 @@ function renderReview() {
     <p class="note">${esc(row.notes)}</p>
     <div class="review-photos">${evidence(row.photo, "Encounter photo")}<div id="reviewReference"></div></div>
     <div class="review-controls">
-      <button id="reviewConfirm" type="button" ${!row.name || !correctionsAvailable ? "disabled" : ""}>Confirm suggested match</button>
+      <button id="reviewConfirm" type="button" ${!canConfirm || !correctionsAvailable ? "disabled" : ""}>Confirm suggested match</button>
       <label for="reviewName">Compare with another buck
         <select id="reviewName"><option value="">Choose a buck</option>${names.map(name => `<option value="${esc(name)}">${esc(name)}</option>`).join("")}</select>
       </label>
@@ -717,7 +745,7 @@ function renderReview() {
     </div>`;
   const picker = $("reviewName");
   function showReference() {
-    const name = picker.value || row.name;
+    const name = picker.value || (canConfirm ? row.name : "");
     $("reviewReference").innerHTML = name ? evidence(profiles[name]?.photo, `Profile photo for ${name}`) : "";
     $("reviewReassign").disabled = !picker.value || !correctionsAvailable;
   }
