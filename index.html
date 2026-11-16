@@ -2,7 +2,7 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>3K Deer Log</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bitter:wght@600;700&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
 /* Layout: field-notebook tool. Summary of each buck up top, charts in a two-column grid, log + entry form below. */
 :root{
@@ -101,30 +101,70 @@ details summary{cursor:pointer;font-weight:600}
 .review-photos figcaption{margin-top:5px;color:var(--muted);font-size:13px}
 .review-controls{display:flex;align-items:end;flex-wrap:wrap;gap:8px;margin-top:12px}
 .review-controls label{display:grid;gap:4px}
+
+:root{color-scheme:light;--bg:#eef1ed;--panel:#fff;--ink:#182822;--muted:#506159;--line:#d6ded8;--accent:#155f4e;--accent-soft:#e1eee9;--moss:#286958;--moss-soft:#e4efe8;--display:"Instrument Sans",system-ui,sans-serif;--body:var(--display);--mono:"IBM Plex Mono",monospace}
+body{margin:0}
+.wrap{max-width:1240px;gap:22px;padding-block:32px 55px}
+.masthead{align-items:flex-start}
+.masthead h1{font-size:clamp(30px,4vw,47px);letter-spacing:-.055em}
+.masthead p{font-size:14px}
+.masthead .brand{color:var(--accent);font-size:13px;font-weight:700;margin:0}
+.nav{display:flex;gap:5px;overflow:auto;border-bottom:1px solid var(--line)}
+.nav a{color:var(--muted);padding:10px 13px;text-decoration:none;white-space:nowrap;border-bottom:3px solid transparent}
+.nav a[aria-current="page"]{color:var(--accent);font-weight:700;border-color:var(--accent)}
+[hidden]{display:none!important}
+[data-page]{display:grid;gap:18px;min-width:0}
+.pagehead{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.pagehead h2{font-size:26px;letter-spacing:-.035em}
+.metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.metric{padding:16px;background:var(--accent);color:white;border-radius:10px}
+.metric span{display:block;font-size:13px}
+.metric strong{font-size:clamp(23px,3vw,36px);font-variant-numeric:tabular-nums}
+.card{padding:clamp(13px,2vw,24px);border-radius:12px}
+.note{max-width:78ch}
+.review-photos{margin-top:12px}
+.review-photos img{height:clamp(112px,29vw,380px)}
+.review-toolbar label,.controls label{font-size:13px;color:var(--muted)}
+#reviewConfirm:not(:disabled){background:var(--accent);border-color:var(--accent);color:white}
+button:disabled{opacity:.46;cursor:default}
+.sighting-tools{display:flex;align-items:end;flex-wrap:wrap;gap:10px}
+.sighting-tools label{display:grid;gap:4px;font-size:13px}
+td.note-cell{white-space:normal;min-width:210px}
+a{color:var(--accent)}
+a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media(max-width:560px){.wrap{padding-top:18px;gap:14px}.nav a{padding-inline:9px}.metric{padding:10px}.metric span{font-size:11px}}
 </style>
 </head><body>
 
 <div class="wrap">
-  <header>
-    <div>
-      <div class="eyebrow">3K property · trail camera patterning</div>
-      <h1>3K Deer Log</h1>
-      <p>Every deer on the 3K trail cameras, with each named buck's pattern and a planner for the best sit. <span id="gen"></span></p>
-    </div>
-    <div class="controls">
-      <label for="deerFilter" class="eyebrow">Showing</label>
-      <select id="deerFilter"><option value="">All deer</option></select>
-    </div>
+  <header class="masthead">
+    <div><p class="brand">3K Property</p><h1>Deer Log</h1><p id="gen"></p></div>
   </header>
-
-  <details class="card" id="buckReview">
-    <summary>Review buck matches <span id="reviewCount"></span></summary>
+  <nav class="nav" aria-label="Deer Log">
+    <a href="#overview">Overview</a>
+    <a href="#sightings">Sightings</a>
+    <a href="#buckReview">Review</a>
+    <a href="#patterns">Patterns</a>
+    <a href="#planner">Planner</a>
+    <a href="#harvest">Harvest</a>
+  </nav>
+  <main>
+  <section data-page="overview">
+    <div class="pagehead"><h2>Camera activity</h2></div>
+    <div class="metrics" id="overviewMetrics"></div>
+    <section class="card"><h2>Confirmed bucks</h2><div class="bucks" id="bucks"></div></section>
+  </section>
+  <section data-page="buckReview" hidden>
+  <section class="card" id="buckReview">
+    <div class="pagehead"><h2>Review buck matches</h2><span id="reviewCount"></span></div>
     <p class="note">Confirm a match, pick another buck, or mark the encounter unknown. Named-buck stats count confirmed sightings.</p>
     <div class="review-toolbar">
       <label for="reviewStatus">Show</label>
       <select id="reviewStatus"><option value="pending">Needs review</option><option value="reviewed">Reviewed</option><option value="all">All candidates</option></select>
       <label for="reviewBuck">Buck</label>
       <select id="reviewBuck"><option value="">All names</option></select>
+      <label for="reviewPeriod">Dates</label>
+      <select id="reviewPeriod"><option value="">All dates</option><option value="recent">Nov 7–16</option><option value="older">Before Nov 7</option></select>
       <button id="reviewPrev" type="button">Previous</button>
       <button id="reviewNext" type="button">Next</button>
       <span id="reviewPosition"></span>
@@ -136,8 +176,10 @@ details summary{cursor:pointer;font-weight:600}
     </div>
     <p class="note">Draft corrections preview here on this browser. To share them, replace the GitHub corrections file with the downloaded JSON and commit it.</p>
     <p class="note" id="reviewMessage" role="status"></p>
-  </details>
+  </section>
+  </section>
 
+  <section data-page="planner" hidden>
   <section class="card" id="fcCard">
     <div style="display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline;justify-content:space-between">
       <h2>Next 3 days</h2>
@@ -171,11 +213,13 @@ details summary{cursor:pointer;font-weight:600}
     <p class="note">Odds are rough. Each buck's sighting rate is scaled up or down by how much more or less often he's been seen in that time window, wind, temperature and moon phase than deer overall. Wind and temperature are one regional reading, not one per stand, so check your own stand's wind before you go. These get sharper as more days are logged.</p>
   </section>
 
-  <section>
-    <div class="eyebrow" style="margin-bottom:8px">Named deer · tap one to filter</div>
-    <div class="bucks" id="bucks"><div class="empty">Named deer show up here after you log a sighting with a name, like "Split G2" or "Big 8".</div></div>
   </section>
 
+  <section data-page="patterns" hidden>
+    <div class="pagehead"><h2>Movement patterns</h2><div class="controls">
+      <label for="patternDeerFilter">Showing</label>
+      <select id="patternDeerFilter"><option value="">All deer</option></select>
+    </div></div>
   <section class="grid">
     <div class="card wide">
       <h2>Time of day</h2>
@@ -190,7 +234,7 @@ details summary{cursor:pointer;font-weight:600}
 
   <section class="grid">
     <div class="card wide">
-      <h2>Buck hit list</h2>
+      <h2>Recent buck activity</h2>
       <p class="note">Who's moving right now, newest first. "Shooting light" means 30 minutes before sunrise to 30 minutes after sunset.</p>
       <div class="tablewrap"><table>
         <thead><tr><th>Buck</th><th>Est. score</th><th>Last seen</th><th>Last 7 days</th><th>7 days before</th><th>Shooting-light visits (14 days)</th><th>Last in shooting light</th><th>Where lately</th></tr></thead>
@@ -215,6 +259,8 @@ details summary{cursor:pointer;font-weight:600}
   </section>
 
 
+  </section>
+  <section data-page="harvest" hidden>
   <section class="card" id="harvCard">
     <div style="display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline;justify-content:space-between">
       <h2>Harvest log</h2><span style="font-size:13px;color:var(--muted)" id="harvSum"></span>
@@ -226,13 +272,23 @@ details summary{cursor:pointer;font-weight:600}
     <p class="note">A buck logged here is marked harvested on his card and drops out of the planner, forecast and hit list.</p>
   </section>
 
+  </section>
+  <section data-page="sightings" hidden>
   <section class="card">
-    <h2>All sightings</h2>
+    <div class="pagehead"><h2>Sightings</h2></div>
+    <div class="sighting-tools">
+      <label>Deer<select id="deerFilter"><option value="">All deer</option></select></label>
+      <label>Dates<select id="sightingPeriod"><option value="">All dates</option><option value="recent">Nov 7–16</option><option value="older">Before Nov 7</option></select></label>
+      <label>Camera<select id="sightingCamera"><option value="">All cameras</option></select></label>
+    </div>
+    <div class="review-toolbar"><button id="sightingPrev" type="button">Previous</button><button id="sightingNext" type="button">Next</button><span id="sightingPosition" role="status"></span></div>
     <div class="tablewrap"><table>
       <thead><tr><th>When</th><th>Camera</th><th>Deer</th><th>Name</th><th>Moon</th><th>Wind</th><th>°F</th><th>Notes</th><th></th></tr></thead>
       <tbody id="rows"><tr><td colspan="9" class="empty" id="loadMsg">Loading your sightings…</td></tr></tbody>
     </table></div>
   </section>
+  </section>
+  </main>
 </div>
 
 <script>
@@ -301,7 +357,7 @@ function planner(){
   const wi=+$("p_win").value;
   const {res,stands,cond,days}=oddsFor(date,wi,$("p_wind").value,$("p_temp").value);
   $("planNote").textContent=`${cond.moon} on ${date.toLocaleDateString(undefined,{month:"short",day:"numeric"})}. Based on ${all.length} sightings over ${days} days.`;
-  $("planRows").innerHTML=res.length?res.map(r=>`<tr><td><b>${esc(r.name)}</b></td><td class="num">${r.prof.score_high?`${esc(r.prof.score_low)}–${esc(r.prof.score_high)}″`:"—"}</td><td class="num"><span class="pill${r.prob>=.25?" hot":""}">${pct(r.prob)}</span></td><td>${esc(r.stand||"—")}${r.inWin?"":` <span style="color:var(--muted)">(never seen this window)</span>`}</td><td style="white-space:normal;min-width:220px">${r.why.map(esc).join("; ")}</td></tr>`).join(""):'<tr><td colspan="5" class="empty">Name some bucks first.</td></tr>';
+  $("planRows").innerHTML=res.length?res.map(r=>`<tr><td><b>${esc(r.name)}</b></td><td class="num">${r.prof.score_high?`${esc(r.prof.score_low)}–${esc(r.prof.score_high)}″`:"—"}</td><td class="num"><span class="pill${r.prob>=.25?" hot":""}">${pct(r.prob)}</span></td><td>${esc(r.stand||"—")}${r.inWin?"":` <span style="color:var(--muted)">(never seen this window)</span>`}</td><td style="white-space:normal;min-width:220px">${r.why.map(esc).join("; ")}</td></tr>`).join(""):'<tr><td colspan="5" class="empty">No confirmed buck sightings yet.</td></tr>';
   $("planStands").innerHTML=stands.slice(0,3).map(([cam,s],i)=>`<div class="buck" style="cursor:default"><div class="eyebrow">${i===0?"Best stand":"Next best"}</div><h3>${esc(cam)}</h3><p class="note" style="margin:0;font-size:13px;color:var(--muted)">${s.b.sort((a,b)=>b.prob-a.prob).slice(0,3).map(b=>`${esc(b.name)} ${pct(b.prob)}`).join(" · ")}</p></div>`).join("");
 }
 
@@ -483,7 +539,7 @@ function hourChart(rows){
 function bucks(){
   const named=new Map();all.forEach(r=>{if(r.name){(named.get(r.name)||named.set(r.name,[]).get(r.name)).push(r)}});
   const el=$("bucks");
-  if(!named.size){el.innerHTML='<div class="empty">Named deer show up here after you log a sighting with a name, like "Split G2" or "Big 8".</div>';return}
+  if(!named.size){el.innerHTML='<div class="empty">Confirmed buck sightings appear here after review.</div>';return}
   const now=Date.now();
   el.innerHTML=[...named.entries()].sort((a,b)=>((profiles[b[0]]||{}).score_high||0)-((profiles[a[0]]||{}).score_high||0)||b[1].length-a[1].length).map(([name,rs])=>{
     const last=rs.reduce((a,r)=>r._d>a?r._d:a,new Date(0));
@@ -506,7 +562,7 @@ function bucks(){
         <dt>Busiest hour</dt><dd>${hrs?fmtHour(hrs[0]):"—"}</dd>
         <dt>Daylight</dt><dd>${Math.round(day/rs.length*100)}%</dd>
       </dl>${bcText?`<div style="background:var(--moss-soft);color:var(--ink);border-radius:6px;padding:6px 8px;font-size:13px"><span class="eyebrow" style="color:var(--moss)">Best odds</span><br>${esc(bcText)}</div>`:""}${prof.description?`<p class="note" style="margin:0;font-size:13px;color:var(--muted)">${esc(prof.description)}${prof.confidence?` · match confidence ${esc(prof.confidence)}`:""}${prof.score_basis?`<br><span style="font-size:12px">Score basis: ${esc(prof.score_basis)}</span>`:""}</p>`:""}</button>`}).join("");
-  el.querySelectorAll(".buck").forEach(b=>b.onclick=()=>{filter=filter===b.dataset.name?"":b.dataset.name;$("deerFilter").value=filter;render()});
+  el.querySelectorAll(".buck").forEach(b=>b.onclick=()=>{filter=b.dataset.name;sightingPage=0;location.hash="sightings";render()});
 }
 
 function render(){
@@ -520,11 +576,59 @@ function render(){
   hbars($("windChart"),count(rows,r=>r.wind,WINDS));
   const tb=t=>t==null||t===""?null:t<20?"Under 20°":t<30?"20s":t<40?"30s":t<50?"40s":t<60?"50s":"60° and up";
   hbars($("tempChart"),count(rows,r=>tb(r.temp),["Under 20°","20s","30s","40s","50s","60° and up"]));
-  const tbody=$("rows");
-  tbody.innerHTML=rows.length?[...rows].sort((a,b)=>b._d-a._d).map(r=>`<tr><td class="num">${fmtWhen(r._d)}</td><td>${esc(r.camera)}</td><td>${esc(r.kind)}</td><td>${esc(r.name)}</td><td>${moonPhase(r._d)}</td><td>${esc(r.wind)}</td><td class="num">${r.temp??""}</td><td>${esc(r.notes)}</td><td></td></tr>`).join(""):'<tr><td colspan="9" class="empty">No sightings yet. Log your first one above.</td></tr>';
-  document.querySelectorAll("img.thumb").forEach(im=>im.onclick=e=>{e.stopPropagation();openBox(im.src,im.dataset.cap||"")});
-  
+  $("patternDeerFilter").innerHTML = sel.innerHTML;
+  $("patternDeerFilter").value = filter;
+  renderSightings(rows);
+  const counts = [
+    ["Recorded sightings", sourceRows.filter(row => !NONDEER.has(row.kind)).length],
+    ["Confirmed buck IDs", new Set(all.filter(row => row.kind === "Buck" && row.name).map(row => row.name)).size],
+    ["Nov 7–16 sightings", sourceRows.filter(row => !NONDEER.has(row.kind) && inPeriod(row, "recent")).length]
+  ];
+  $("overviewMetrics").innerHTML = counts.map(([label, value]) =>
+    `<div class="metric"><strong>${value.toLocaleString()}</strong><span>${label}</span></div>`
+  ).join("");
 }
+let sightingPage = 0;
+function inPeriod(row, period) {
+  const date = row.when.slice(0, 10);
+  if (period === "recent") return date >= "2026-11-07" && date <= "2026-11-16";
+  return period !== "older" || date < "2026-11-07";
+}
+function renderSightings(rows = view()) {
+  const camera = $("sightingCamera").value;
+  const period = $("sightingPeriod").value;
+  const results = rows.filter(row => inPeriod(row, period) && (!camera || row.camera === camera))
+    .sort((a, b) => b._d - a._d);
+  const pageSize = 50;
+  sightingPage = Math.max(0, Math.min(sightingPage, Math.ceil(results.length / pageSize) - 1));
+  const start = pageSize * sightingPage;
+  const end = Math.min(results.length, start + pageSize);
+  $("sightingPrev").disabled = start === 0;
+  $("sightingNext").disabled = end === results.length;
+  $("sightingPosition").textContent = results.length ? `${start + 1}–${end} of ${results.length}` : "0 sightings";
+  $("rows").innerHTML = results.slice(start, end).map(row => `<tr>
+    <td class="num">${fmtWhen(row._d)}</td><td>${esc(row.camera)}</td><td>${esc(row.kind)}</td>
+    <td>${esc(row.name || (row.kind === "Buck" ? "Unknown buck" : ""))}</td><td>${moonPhase(row._d)}</td>
+    <td>${esc(row.wind)}</td><td class="num">${row.temp ?? ""}</td><td class="note-cell">${esc(row.notes)}</td>
+    <td>${row.photo ? `<button type="button" data-photo="${esc(row.photo)}">Photo</button>` : ""}</td></tr>`
+  ).join("") || '<tr><td colspan="9" class="empty">No sightings match these filters.</td></tr>';
+}
+$("rows").onclick = event => {
+  const button = event.target.closest("button[data-photo]");
+  if (button) openBox(button.dataset.photo, "Encounter photo");
+};
+$("sightingPeriod").onchange = $("sightingCamera").onchange = () => { sightingPage = 0; renderSightings(); };
+$("sightingPrev").onclick = () => { sightingPage--; renderSightings(); };
+$("sightingNext").onclick = () => { sightingPage++; renderSightings(); };
+function showPage() {
+  const links = [...document.querySelectorAll(".nav a")];
+  const page = links.some(link => link.hash === location.hash) ? location.hash.slice(1) : "overview";
+  document.querySelectorAll("[data-page]").forEach(section => { section.hidden = section.dataset.page !== page; });
+  links.forEach(link => link.hash === "#" + page ? link.setAttribute("aria-current", "page") : link.removeAttribute("aria-current"));
+}
+addEventListener("hashchange", showPage);
+showPage();
+
 function openBox(src,cap){const d=document.createElement("div");d.className="lightbox";d.setAttribute("role","dialog");
   const im=document.createElement("img");const p=document.createElement("p");
   im.src=src;im.alt=cap;p.textContent=cap+" · tap to close";
@@ -535,7 +639,7 @@ function alertMsg(id,e){$(id).textContent=e?.code==="not_granted"||e?.code==="fo
 
 function toRow(o){return{camera:String(o.camera||"").trim(),kind:o.kind||"Unknown",name:String(o.name||"").trim(),wind:o.wind||"",temp:o.temp===""||o.temp==null||isNaN(+o.temp)?null:+o.temp,notes:String(o.notes||"").trim(),when:o.when}}
 
-$("deerFilter").onchange=e=>{filter=e.target.value;render()};
+$("deerFilter").onchange = $("patternDeerFilter").onchange = e => { filter=e.target.value; sightingPage=0; render(); };
 $("p_win").innerHTML=WINS.map((w,i)=>`<option value="${i}">${w[0]}</option>`).join("");
 {const h=new Date().getHours();$("p_win").value=h<10?0:h<15?1:2;const t=new Date();$("p_date").value=`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,"0")}-${String(t.getDate()).padStart(2,"0")}`}
 try{const s=JSON.parse(localStorage.getItem("plan")||"{}");["p_win","p_wind","p_temp"].forEach(k=>{if(s[k]!=null)$(k).value=s[k]})}catch{}
@@ -543,6 +647,7 @@ try{const s=JSON.parse(localStorage.getItem("plan")||"{}");["p_win","p_wind","p_
 
 
 const draftKey = "3k-deer-log:buck-corrections";
+let belowMinimum = new Set();
 let sourceRows = [], published = new Map(), drafts = new Map(), candidates = [];
 let reviewIndex = 0, correctionsAvailable = false;
 const acceptedName = (row, decisions) => decisions.has(row.id)
@@ -562,7 +667,7 @@ function applyBuckDecisions() {
   const decisions = decisionsForPreview();
   all = sourceRows.filter(row => !NONDEER.has(row.kind)).map(row =>
     row.kind === "Buck" ? {...row, name: acceptedName(row, decisions)} : row
-  );
+  ).filter(row => row.kind !== "Buck" || !belowMinimum.has(row.name));
   if (filter && !filter.startsWith("@") && !all.some(row => row.name === filter)) filter = "";
   render();
   renderReview();
@@ -574,6 +679,7 @@ function renderReview() {
   const decisions = decisionsForPreview();
   const pending = row => !decisions.has(row.id) && row.source !== "carson";
   const rows = candidates.filter(row =>
+    inPeriod(row, $("reviewPeriod").value) &&
     (!buck || row.name === buck || acceptedName(row, decisions) === buck) &&
     (status === "all" || (status === "pending" ? pending(row) : !pending(row)))
   );
@@ -636,7 +742,7 @@ function renderReview() {
   $("reviewUnknown").onclick = () => save("");
 }
 
-$("reviewStatus").onchange = $("reviewBuck").onchange = () => { reviewIndex = 0; renderReview(); };
+$("reviewStatus").onchange = $("reviewBuck").onchange = $("reviewPeriod").onchange = () => { reviewIndex = 0; renderReview(); };
 $("reviewPrev").onclick = () => { reviewIndex--; renderReview(); };
 $("reviewNext").onclick = () => { reviewIndex++; renderReview(); };
 $("reviewExport").onclick = () => {
@@ -676,8 +782,13 @@ $("reviewExport").onclick = () => {
     preds = sourceRows.filter(r => r.kind === "Predator");
     harvests = data.harvests || [];
     profiles = Object.fromEntries(data.bucks.filter(v => v?.name).map(v => [v.name, v]));
-    candidates = sourceRows.filter(r => r.kind === "Buck" && r.id &&
-      (r.name || r.photo || published.has(r.id) || drafts.has(r.id)))
+    belowMinimum = new Set(data.bucks.filter(profile =>
+      profile?.name && Number.isFinite(profile.score_high) && profile.score_high < 100
+    ).map(profile => profile.name));
+    for (const camera of [...new Set(sourceRows.map(row => row.camera).filter(Boolean))].sort()) {
+      $("sightingCamera").add(new Option(camera, camera));
+    }
+    candidates = sourceRows.filter(r => r.kind === "Buck" && r.id)
       .sort((a,b) => Number(Boolean(b.photo)) - Number(Boolean(a.photo)) || b._d - a._d);
     for (const name of [...new Set([...Object.keys(profiles), ...candidates.map(row => row.name).filter(Boolean)])].sort()) {
       $("reviewBuck").add(new Option(name, name));
