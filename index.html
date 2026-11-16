@@ -127,7 +127,7 @@ details summary{cursor:pointer;font-weight:600}
     <div id="fcDays" class="fcdays"></div>
   </section>
 
-  <section class="card" id="mapCard">
+  <section class="card" id="mapCard" hidden>
     <div style="display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline;justify-content:space-between">
       <h2>Property map</h2>
       <span style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--muted)">Sit <select id="mapSit"></select></span>
@@ -391,7 +391,7 @@ function renderMap(){
   const placed=Object.entries(STANDS).filter(([,v])=>isFinite(v.lat)&&isFinite(v.lon));
   const sits=(window.__sits||[]).filter(s=>!s.past),sel=$("mapSit");
   if(sel.options.length!==sits.length){const old=sel.value;sel.innerHTML=sits.map((s,i)=>`<option value="${i}">${new Date(s.day+"T12:00").toLocaleDateString(undefined,{weekday:"short"})} ${s.lab.split(" ")[0].toLowerCase()}</option>`).join("");if(old&&+old<sits.length)sel.value=old}
-  if(!placed.length||!window.L){$("map").hidden=true;$("mapNote").textContent=window.L?"Stands show here once they're placed in the Deer Log editor (Edit → Place stands).":"The map couldn't load.";return}
+  $("mapCard").hidden=!placed.length;if(!placed.length||!window.L){$("map").hidden=true;$("mapNote").textContent=window.L?"Stands show here once they're placed in the Deer Log editor (Edit → Place stands).":"The map couldn't load.";return}
   $("map").hidden=false;
   if(!map){map=L.map("map",{scrollWheelZoom:false});
     L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{maxZoom:19,attribution:"Imagery © Esri"}).addTo(map);
