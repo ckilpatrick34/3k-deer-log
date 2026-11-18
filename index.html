@@ -172,7 +172,7 @@ a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
       <label for="reviewBuck">Buck</label>
       <select id="reviewBuck"><option value="">All names</option></select>
       <label for="reviewPeriod">Dates</label>
-      <select id="reviewPeriod"><option value="">All dates</option><option value="recent">Nov 7–16</option><option value="older">Before Nov 7</option></select>
+      <select id="reviewPeriod"><option value="">All dates</option><option value="recent">Nov 7–18</option><option value="older">Before Nov 7</option></select>
       <button id="reviewPrev" type="button">Previous</button>
       <button id="reviewNext" type="button">Next</button>
       <span id="reviewPosition"></span>
@@ -286,7 +286,7 @@ a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
     <div class="pagehead"><h2>Sightings</h2></div>
     <div class="sighting-tools">
       <label>Deer<select id="deerFilter"><option value="">All deer</option></select></label>
-      <label>Dates<select id="sightingPeriod"><option value="">All dates</option><option value="recent">Nov 7–16</option><option value="older">Before Nov 7</option></select></label>
+      <label>Dates<select id="sightingPeriod"><option value="">All dates</option><option value="recent">Nov 7–18</option><option value="older">Before Nov 7</option></select></label>
       <label>Camera<select id="sightingCamera"><option value="">All cameras</option></select></label>
     </div>
     <div class="review-toolbar"><button id="sightingPrev" type="button">Previous</button><button id="sightingNext" type="button">Next</button><span id="sightingPosition" role="status"></span></div>
@@ -558,7 +558,8 @@ function bucks(){
     const prof=profiles[name]||{};
     const bc=bestConditions(rs);
     const bcText=[...bc.list.map(x=>x.f.fmt?x.f.fmt(x.v):x.v),bc.cam].filter(Boolean).join(" · ");
-    const best=prof.photo?{photo:prof.photo,_d:prof.when?parseWhen(prof.when):last,camera:prof.camera||cam}:(rs.find(r=>r.photo&&/conf high/.test(r.notes||""))||rs.find(r=>r.photo&&/pts/.test(r.notes||""))||rs.find(r=>r.photo));
+    const verified=verifiedCovers[name];
+    const best=verified?{photo:verified.photo}:prof.photo?{photo:prof.photo,_d:prof.when?parseWhen(prof.when):last,camera:prof.camera||cam}:(rs.find(r=>r.photo&&/conf high/.test(r.notes||""))||rs.find(r=>r.photo&&/pts/.test(r.notes||""))||rs.find(r=>r.photo));
     return `<button class="buck${filter===name?" sel":""}" data-name="${esc(name)}">
       ${best?`<img class="pic" src="${esc(best.photo)}" loading="lazy" alt="${esc(name)}">`:""}
       <div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><h3>${esc(name)}</h3>${harvestedNames().has(name)?`<span class="pill gone">harvested ${esc(harvestedNames().get(name))}</span>`:`<span class="pill${recent?" hot":""}">${recent?"seen this week":rs.length+" pics"}</span>`}</div>
@@ -590,7 +591,7 @@ function render(){
   const counts = [
     ["Recorded sightings", sourceRows.filter(row => !NONDEER.has(row.kind) && inProperty(row)).length],
     ["Confirmed buck IDs", new Set(all.filter(row => row.kind === "Buck" && row.name).map(row => row.name)).size],
-    ["Nov 7–16 sightings", sourceRows.filter(row => !NONDEER.has(row.kind) && inProperty(row) && inPeriod(row, "recent")).length]
+    ["Nov 7–18 sightings", sourceRows.filter(row => !NONDEER.has(row.kind) && inProperty(row) && inPeriod(row, "recent")).length]
   ];
   $("overviewMetrics").innerHTML = counts.map(([label, value]) =>
     `<div class="metric"><strong>${value.toLocaleString()}</strong><span>${label}</span></div>`
@@ -599,7 +600,7 @@ function render(){
 let sightingPage = 0;
 function inPeriod(row, period) {
   const date = row.when.slice(0, 10);
-  if (period === "recent") return date >= "2026-11-07" && date <= "2026-11-16";
+  if (period === "recent") return date >= "2026-11-07" && date <= "2026-11-18";
   return period !== "older" || date < "2026-11-07";
 }
 function renderSightings(rows = view()) {
@@ -655,6 +656,28 @@ try{const s=JSON.parse(localStorage.getItem("plan")||"{}");["p_win","p_wind","p_
 
 
 const draftKey = "3k-deer-log:buck-corrections";
+const verifiedCovers = {
+  "Broken G2 Ghost": {
+    "photo": "broken-g2-verified.jpg",
+    "id": "c20261109-bg2",
+    "frame": "SYFW05235"
+  },
+  "Cathedral": {
+    "photo": "cathedral-verified.jpg",
+    "id": "d20261112-065",
+    "frame": "W1038334"
+  },
+  "Ten Spot": {
+    "photo": "ten-spot-verified.jpg",
+    "id": "d20261112-053",
+    "frame": "W1038316"
+  },
+  "Kingpin": {
+    "photo": "kingpin-verified.jpg",
+    "id": "d20261113-104",
+    "frame": "W1027647"
+  }
+};
 let belowMinimum = new Set();
 const propertyOf = camera => String(camera || "").trim().toLowerCase() === "starkville" ? "starkville" : "camp";
 const inProperty = row => !$("propertyFilter").value || propertyOf(row.camera) === $("propertyFilter").value;
@@ -734,7 +757,7 @@ function renderReview() {
     ${pending(row) ? "Needs review" : `Reviewed as <strong>${esc(current || "Unknown buck")}</strong>`}
     ${drafts.has(row.id) ? " (browser draft)" : ""}.</p>
     <p class="note">${esc(row.notes)}</p>
-    <div class="review-photos">${evidence(row.photo, "Encounter photo")}<div id="reviewReference"></div></div>
+    <div class="review-photos">${evidence(Object.values(verifiedCovers).find(cover => cover.id === row.id)?.photo || row.photo, "Encounter photo")}<div id="reviewReference"></div></div>
     <div class="review-controls">
       <button id="reviewConfirm" type="button" ${!canConfirm || !correctionsAvailable ? "disabled" : ""}>Confirm suggested match</button>
       <label for="reviewName">Compare with another buck
@@ -746,7 +769,7 @@ function renderReview() {
   const picker = $("reviewName");
   function showReference() {
     const name = picker.value || (canConfirm ? row.name : "");
-    $("reviewReference").innerHTML = name ? evidence(profiles[name]?.photo, `Profile photo for ${name}`) : "";
+    $("reviewReference").innerHTML = name ? evidence(verifiedCovers[name]?.photo || profiles[name]?.photo, `Profile photo for ${name}`) : "";
     $("reviewReassign").disabled = !picker.value || !correctionsAvailable;
   }
   picker.onchange = showReference;
