@@ -162,6 +162,10 @@ a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
     <div class="pagehead"><h2>Camera activity</h2></div>
     <div class="metrics" id="overviewMetrics"></div>
     <section class="card"><h2>Confirmed bucks</h2><div class="bucks" id="bucks"></div></section>
+    <section class="card"><h2>Buck profiles and suggested matches</h2>
+      <p class="note" id="buckReviewSummary"></p>
+      <div class="bucks" id="buckCandidates"></div>
+    </section>
   </section>
   <section data-page="buckReview" hidden>
   <section class="card" id="buckReview">
@@ -545,8 +549,43 @@ function hourChart(rows){
   $("hourNote").textContent=rows.length?`${Math.round(day/rows.length*100)}% of these sightings fall between 6am and 6pm (shaded). Busiest hour: ${fmtHour(peak)}.`:"Sightings by the hour the photo was taken.";
 }
 
+function buckCandidateCards(){
+  const decisions = decisionsForPreview();
+  const pending = candidates.filter(row => inProperty(row) &&
+    !decisions.has(row.id) && row.source !== "carson" && !belowMinimum.has(row.name));
+  const suggested = new Map(count(pending, row => row.name));
+  const confirmed = new Map(count(all.filter(row => row.kind === "Buck"), row => row.name));
+  const properties = $("propertyFilter").value ? [$("propertyFilter").value] : ["camp", "starkville"];
+  const names = [...new Set(properties.flatMap(property => [...buckNamesFor(property)]))]
+    .filter(name => !belowMinimum.has(name))
+    .sort((a,b) => (suggested.get(b) || 0) - (suggested.get(a) || 0) || a.localeCompare(b));
+  $("buckReviewSummary").textContent = `${names.length} profiles · ${pending.length.toLocaleString()} buck encounters awaiting review. Suggested matches may contain repeat visits or multiple bucks.`;
+  const target = $("buckCandidates");
+  target.innerHTML = names.map(name => {
+    const profile = profiles[name] || {};
+    const photo = verifiedCovers[name]?.photo || profile.photo;
+    return `<button class="buck" data-review-name="${esc(name)}">
+      ${photo ? `<img class="pic" src="${esc(photo)}" loading="lazy" alt="">` : ""}
+      <h3>${esc(name)}</h3>
+      <dl class="stats">
+        <dt>Confirmed visits</dt><dd>${confirmed.get(name) || 0}</dd>
+        <dt>Suggested visits</dt><dd>${suggested.get(name) || 0}</dd>
+      </dl>
+    </button>`;
+  }).join("");
+  target.querySelectorAll("[data-review-name]").forEach(button => button.onclick = () => {
+    $("reviewBuck").value = button.dataset.reviewName;
+    $("reviewStatus").value = suggested.get(button.dataset.reviewName) ? "pending" : "all";
+    $("reviewPeriod").value = "";
+    reviewIndex = 0;
+    location.hash = "buckReview";
+    renderReview();
+  });
+}
+
 function bucks(){
   const named=new Map();all.forEach(r=>{if(r.name){(named.get(r.name)||named.set(r.name,[]).get(r.name)).push(r)}});
+  buckCandidateCards();
   const el=$("bucks");
   if(!named.size){el.innerHTML='<div class="empty">Confirmed buck sightings appear here after review.</div>';return}
   const now=Date.now();
@@ -563,10 +602,10 @@ function bucks(){
     const best=verified?{photo:verified.photo}:prof.photo?{photo:prof.photo,_d:prof.when?parseWhen(prof.when):last,camera:prof.camera||cam}:(rs.find(r=>r.photo&&/conf high/.test(r.notes||""))||rs.find(r=>r.photo&&/pts/.test(r.notes||""))||rs.find(r=>r.photo));
     return `<button class="buck${filter===name?" sel":""}" data-name="${esc(name)}">
       ${best?`<img class="pic" src="${esc(best.photo)}" loading="lazy" alt="${esc(name)}">`:""}
-      <div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><h3>${esc(name)}</h3>${harvestedNames().has(name)?`<span class="pill gone">harvested ${esc(harvestedNames().get(name))}</span>`:`<span class="pill${recent?" hot":""}">${recent?"seen this week":rs.length+" pics"}</span>`}</div>
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><h3>${esc(name)}</h3>${harvestedNames().has(name)?`<span class="pill gone">harvested ${esc(harvestedNames().get(name))}</span>`:`<span class="pill${recent?" hot":""}">${recent?"seen this week":rs.length+(rs.length===1?" confirmed visit":" confirmed visits")}</span>`}</div>
       <dl class="stats">
         ${prof.score_high?`<dt>Est. score</dt><dd><b>${esc(prof.score_low)}–${esc(prof.score_high)}″</b>${prof.score_conf?` <span style="color:var(--muted);font-size:12px">(${esc(prof.score_conf)})</span>`:""}</dd>`:""}
-        <dt>Sightings</dt><dd>${rs.length}</dd>
+        <dt>Confirmed visits</dt><dd>${rs.length}</dd>
         <dt>Last seen</dt><dd>${fmtWhen(last)}</dd>
         <dt>Top camera</dt><dd>${esc(cam)}</dd>
         <dt>Busiest hour</dt><dd>${hrs?fmtHour(hrs[0]):"—"}</dd>
@@ -835,7 +874,7 @@ $("reviewExport").onclick = () => {
     harvests = data.harvests || [];
     profiles = Object.fromEntries(data.bucks.filter(v => v?.name).map(v => [v.name, v]));
     belowMinimum = new Set(data.bucks.filter(profile =>
-      profile?.name && Number.isFinite(profile.score_high) && profile.score_high < 100
+      profile?.name && Number.isFinite(profile.score_high) && profile.score_high < 120
     ).map(profile => profile.name));
     for (const camera of [...new Set(sourceRows.map(row => row.camera).filter(Boolean))].sort()) {
       $("sightingCamera").add(new Option(camera, camera));
