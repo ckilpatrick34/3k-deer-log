@@ -134,12 +134,23 @@ td.note-cell{white-space:normal;min-width:210px}
 a{color:var(--accent)}
 a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 @media(max-width:560px){.wrap{padding-top:18px;gap:14px}.nav a{padding-inline:9px}.metric{padding:10px}.metric span{font-size:11px}}
+
+.audit-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.audit-grid .card{padding:14px;min-width:0}
+.audit-photo h3{font-size:16px;margin:12px 0 4px}
+.audit-photo ul{padding-left:20px}
+.audit-photo li{margin-top:12px}
+.audit-photo li p{margin:4px 0;font-size:13px}
+.audit-image{display:block;width:100%;padding:0;border:0;background:#17211b;aspect-ratio:4/3;overflow:hidden}
+.audit-image img{display:block;width:100%;height:100%;object-fit:contain}
+.buck .pic.audit-cover{object-fit:contain;background:#17211b}
+@media(max-width:640px){.audit-grid{grid-template-columns:1fr}}
 </style>
 </head><body>
 
 <div class="wrap">
   <header class="masthead">
-    <div><p class="brand">3K Property</p><h1>Deer Log</h1><p id="gen"></p></div>
+    <div><p class="brand">3K Property</p><h1>Deer Log</h1><p id="gen"></p><p>Photo audit updated November 19 · November 17–18 downloaded frames</p></div>
     <div class="controls">
       <label for="propertyFilter">Location</label>
       <select id="propertyFilter">
@@ -151,6 +162,7 @@ a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   </header>
   <nav class="nav" aria-label="Deer Log">
     <a href="#overview">Overview</a>
+    <a href="#recentPhotos">Recent photos</a>
     <a href="#sightings">Sightings</a>
     <a href="#buckReview">Review</a>
     <a href="#patterns">Patterns</a>
@@ -161,11 +173,26 @@ a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   <section data-page="overview">
     <div class="pagehead"><h2>Camera activity</h2></div>
     <div class="metrics" id="overviewMetrics"></div>
+    <section class="card"><h2>Recent buck profiles</h2>
+      <p class="note" id="recentBuckNote">Loading the recent photo review…</p>
+      <div class="bucks" id="recentBuckRoster"></div>
+    </section>
     <section class="card"><h2>Confirmed bucks</h2><div class="bucks" id="bucks"></div></section>
     <section class="card"><h2>Buck profiles and suggested matches</h2>
       <p class="note" id="buckReviewSummary"></p>
       <div class="bucks" id="buckCandidates"></div>
     </section>
+  </section>
+  <section data-page="recentPhotos" hidden>
+    <div class="pagehead"><h2>November 17–18 photos</h2></div>
+    <p class="note" id="auditStatus" role="status">Loading the photo review…</p>
+    <div class="sighting-tools">
+      <label>Showing<select id="auditMode"><option value="bucks">Visible racks</option><option value="assigned">Matched frames</option><option value="all">All downloaded photos</option></select></label>
+      <label>Buck<select id="auditName"><option value="">All identities</option></select></label>
+      <label>Date<select id="auditDate"><option value="">Both dates</option><option value="2026-11-17">November 17</option><option value="2026-11-18">November 18</option></select></label>
+    </div>
+    <div class="review-toolbar"><button id="auditPrev" type="button">Previous</button><button id="auditNext" type="button">Next</button><span id="auditPosition" role="status"></span></div>
+    <div id="auditGrid" class="audit-grid"></div>
   </section>
   <section data-page="buckReview" hidden>
   <section class="card" id="buckReview">
@@ -884,7 +911,7 @@ $("reviewExport").onclick = () => {
     for (const name of [...new Set([...Object.keys(profiles), ...candidates.map(row => row.name).filter(Boolean)])].sort()) {
       $("reviewBuck").add(new Option(name, name));
     }
-    $("gen").textContent = "Updated " + new Date(data.generated).toLocaleString(undefined,
+    $("gen").textContent = "Sighting log updated " + new Date(data.generated).toLocaleString(undefined,
       {month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
     applyBuckDecisions();
     loadForecast();
@@ -896,4 +923,150 @@ $("reviewExport").onclick = () => {
 })();
 </script>
 
+<script>
+(() => {
+  let audit = null;
+  let auditPage = 0;
+  let renderVersion = 0;
+  const pageSize = 24;
+  const packages = new Map();
+  const assigned = buck => Boolean(buck.identity);
+  const interested = buck => buck.size_class !== "small";
+  const propertyMatches = row => !$("propertyFilter").value ||
+    row.property.toLowerCase() === $("propertyFilter").value;
+
+  async function readPackage(path) {
+    if (!packages.has(path)) {
+      packages.set(path, fetch(path + "?v=" + encodeURIComponent(audit.version))
+        .then(response => {
+          if (!response.ok) throw new Error("Photo previews could not be loaded.");
+          return response.json();
+        }).catch(error => {
+          packages.delete(path);
+          throw error;
+        }));
+    }
+    return packages.get(path);
+  }
+
+  function photoRows() {
+    if (!audit) return [];
+    const mode = $("auditMode").value;
+    const name = $("auditName").value;
+    const date = $("auditDate").value;
+    return audit.frames.filter(row => propertyMatches(row) &&
+      (!date || row.when.startsWith(date)) &&
+      (!name || row.bucks.some(buck => buck.identity === name)) &&
+      (mode === "all" || (mode === "assigned" ? row.bucks.some(assigned) :
+        row.bucks.some(interested))));
+  }
+
+  function renderProfiles() {
+    const rows = audit.profiles.filter(propertyMatches);
+    $("recentBuckRoster").innerHTML = rows.map(profile =>
+      `<button class="buck" data-audit-name="${esc(profile.name)}">
+        <img class="pic audit-cover" src="${esc(profile.cover)}" alt="${esc(profile.name)} rack" loading="lazy">
+        <h3>${esc(profile.name)}</h3>
+        <p class="note">${esc(profile.camera)} · provisional identity</p>
+        <dl class="stats"><dt>Matched frames</dt><dd>${profile.frame_count}</dd>
+        <dt>Encounters</dt><dd>${profile.encounters}</dd></dl>
+      </button>`).join("") || '<p class="note">No reviewed recent profiles for this location.</p>';
+    $("recentBuckNote").textContent = `${rows.length} provisional profiles from the November 17–18 photo review. Obvious small racks are omitted. Exact scores and overlap with earlier names remain under review. Buck visits are grouped within a 30-minute gap.`;
+    $("recentBuckRoster").querySelectorAll("[data-audit-name]").forEach(button => {
+      button.onclick = () => {
+        $("auditName").value = button.dataset.auditName;
+        $("auditMode").value = "assigned";
+        $("auditDate").value = "";
+        auditPage = 0;
+        location.hash = "recentPhotos";
+        renderPhotos();
+      };
+    });
+    const selected = $("auditName").value;
+    $("auditName").innerHTML = '<option value="">All identities</option>' +
+      rows.map(profile => `<option value="${esc(profile.name)}">${esc(profile.name)}</option>`).join("");
+    if (rows.some(profile => profile.name === selected)) $("auditName").value = selected;
+  }
+
+  async function renderPhotos() {
+    if (!audit) return;
+    const version = ++renderVersion;
+    const rows = photoRows().sort((first, second) => second.when.localeCompare(first.when));
+    const pages = Math.ceil(rows.length / pageSize);
+    auditPage = Math.max(0, Math.min(auditPage, pages - 1));
+    const start = auditPage * pageSize;
+    const selected = rows.slice(start, start + pageSize);
+    $("auditPosition").textContent = rows.length ?
+      `${start + 1}–${Math.min(start + pageSize, rows.length)} of ${rows.length} photos` : "No photos in this view.";
+    $("auditPrev").disabled = auditPage === 0;
+    $("auditNext").disabled = auditPage + 1 >= pages;
+    $("auditStatus").textContent = `${audit.summary.photo_count} downloaded November 17–18 photos reviewed. The archive has incomplete camera coverage. Photos with obscured antlers can remain unresolved.`;
+    $("auditGrid").innerHTML = selected.map((row, index) => {
+      const observations = row.bucks.filter(interested);
+      const label = observations.length ? observations.map(buck =>
+        `<li><strong>${esc(buck.identity || "Identity unresolved")}</strong> · ${esc(buck.position || "")}
+          ${buck.candidate ? `<br>Possible ${esc(buck.candidate)}` : ""}
+          <p class="note">${esc(buck.evidence || "")}</p></li>`).join("") :
+        "<li>No clearly visible developed rack in this view.</li>";
+      return `<article class="card audit-photo">
+        <button class="audit-image" data-audit-index="${index}" type="button" aria-label="Enlarge ${esc(row.frame)}">
+          <img data-audit-preview="${index}" alt="${esc(row.camera)} ${esc(row.frame)}" loading="lazy">
+        </button>
+        <h3>${esc(row.camera)} · ${fmtWhen(parseWhen(row.when))}</h3>
+        <p class="note">${esc(row.frame)} · ${esc(row.property)}</p>
+        <ul>${label}</ul>
+      </article>`;
+    }).join("");
+    const paths = [...new Set(selected.map(row => row.package))];
+    const loaded = await Promise.allSettled(paths.map(path => readPackage(path)));
+    if (version !== renderVersion) return;
+    const available = new Map();
+    loaded.forEach((result, index) => {
+      if (result.status === "fulfilled") available.set(paths[index], result.value);
+    });
+    selected.forEach((row, index) => {
+      const image = available.get(row.package)?.[row.frame];
+      const element = $("auditGrid").querySelector(`[data-audit-preview="${index}"]`);
+      if (image) element.src = image;
+      else element.alt = "Photo preview unavailable. Reload to retry.";
+      const button = $("auditGrid").querySelector(`[data-audit-index="${index}"]`);
+      button.disabled = !image;
+      button.onclick = () => openBox(image, row.camera + " · " + row.frame + " · " + row.when);
+    });
+    if (loaded.some(result => result.status === "rejected")) {
+      $("auditStatus").textContent += " Some previews failed to load. Reload to retry.";
+    }
+  }
+
+  async function loadAudit() {
+    try {
+      const response = await fetch("photo-audit.json", {cache: "no-store"});
+      if (!response.ok) throw new Error("Recent photo review could not be loaded.");
+      audit = await response.json();
+      renderProfiles();
+      if (location.hash === "#recentPhotos") await renderPhotos();
+    } catch (error) {
+      $("recentBuckNote").textContent = error.message;
+      $("auditStatus").textContent = error.message;
+    }
+  }
+
+  $("propertyFilter").addEventListener("change", () => {
+    if (!audit) return;
+    auditPage = 0;
+    renderProfiles();
+    if (location.hash === "#recentPhotos") renderPhotos();
+  });
+  ["auditMode", "auditName", "auditDate"].forEach(id => {
+    $(id).onchange = () => { auditPage = 0; renderPhotos(); };
+  });
+  $("auditPrev").onclick = () => { auditPage--; renderPhotos(); };
+  $("auditNext").onclick = () => { auditPage++; renderPhotos(); };
+  addEventListener("hashchange", () => {
+    if (location.hash === "#recentPhotos") renderPhotos();
+  });
+  loadAudit();
+})();
+
+</script>
 </body></html>
