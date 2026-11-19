@@ -656,9 +656,9 @@ function render(){
   $("patternDeerFilter").value = filter;
   renderSightings(rows);
   const counts = [
-    ["Recorded sightings", sourceRows.filter(row => !NONDEER.has(row.kind) && inProperty(row)).length],
+    ["Historical log entries", sourceRows.filter(row => !NONDEER.has(row.kind) && inProperty(row)).length],
     ["Confirmed buck IDs", new Set(all.filter(row => row.kind === "Buck" && row.name).map(row => row.name)).size],
-    ["Nov 7–18 sightings", sourceRows.filter(row => !NONDEER.has(row.kind) && inProperty(row) && inPeriod(row, "recent")).length]
+    ["Nov 7–18 log entries", sourceRows.filter(row => !NONDEER.has(row.kind) && inProperty(row) && inPeriod(row, "recent")).length]
   ];
   $("overviewMetrics").innerHTML = counts.map(([label, value]) =>
     `<div class="metric"><strong>${value.toLocaleString()}</strong><span>${label}</span></div>`
@@ -968,10 +968,11 @@ $("reviewExport").onclick = () => {
         <img class="pic audit-cover" src="${esc(profile.cover)}" alt="${esc(profile.name)} rack" loading="lazy">
         <h3>${esc(profile.name)}</h3>
         <p class="note">${esc(profile.camera)} · provisional identity</p>
+        ${profile.possible_aliases?.length ? `<p class="note">May be the same buck as ${profile.possible_aliases.map(esc).join(", ")}.</p>` : ""}
         <dl class="stats"><dt>Matched frames</dt><dd>${profile.frame_count}</dd>
         <dt>Encounters</dt><dd>${profile.encounters}</dd></dl>
       </button>`).join("") || '<p class="note">No reviewed recent profiles for this location.</p>';
-    $("recentBuckNote").textContent = `${rows.length} provisional profiles from the November 17–18 photo review. Obvious small racks are omitted. Exact scores and overlap with earlier names remain under review. Buck visits are grouped within a 30-minute gap.`;
+    $("recentBuckNote").textContent = `${rows.length} provisional encounter profiles from the November 17–18 photo review. Obvious small racks are omitted. Exact scores and overlap with earlier names remain under review. Buck visits are grouped within a 30-minute gap.`;
     $("recentBuckRoster").querySelectorAll("[data-audit-name]").forEach(button => {
       button.onclick = () => {
         $("auditName").value = button.dataset.auditName;
@@ -1000,7 +1001,7 @@ $("reviewExport").onclick = () => {
       `${start + 1}–${Math.min(start + pageSize, rows.length)} of ${rows.length} photos` : "No photos in this view.";
     $("auditPrev").disabled = auditPage === 0;
     $("auditNext").disabled = auditPage + 1 >= pages;
-    $("auditStatus").textContent = `${audit.summary.photo_count} downloaded November 17–18 photos reviewed. The archive has incomplete camera coverage. Photos with obscured antlers can remain unresolved.`;
+    $("auditStatus").textContent = `${audit.summary.photo_count} downloaded November 17–18 photos reviewed. Older archive dates still need reconciliation. Photos with obscured antlers can remain unresolved.`;
     $("auditGrid").innerHTML = selected.map((row, index) => {
       const observations = row.bucks.filter(interested);
       const label = observations.length ? observations.map(buck =>
@@ -1014,6 +1015,7 @@ $("reviewExport").onclick = () => {
         </button>
         <h3>${esc(row.camera)} · ${fmtWhen(parseWhen(row.when))}</h3>
         <p class="note">${esc(row.frame)} · ${esc(row.property)}</p>
+        ${["unusable_image", "partially_corrupted_image"].includes(row.classification) ? '<p class="note">Source photo is damaged. Identification remains unresolved.</p>' : ""}
         <ul>${label}</ul>
       </article>`;
     }).join("");
@@ -1028,7 +1030,8 @@ $("reviewExport").onclick = () => {
       const image = available.get(row.package)?.[row.frame];
       const element = $("auditGrid").querySelector(`[data-audit-preview="${index}"]`);
       if (image) element.src = image;
-      else element.alt = "Photo preview unavailable. Reload to retry.";
+      else element.alt = row.classification === "unusable_image" ?
+        "Source JPEG cannot be decoded." : "Photo preview unavailable. Reload to retry.";
       const button = $("auditGrid").querySelector(`[data-audit-index="${index}"]`);
       button.disabled = !image;
       button.onclick = () => openBox(image, row.camera + " · " + row.frame + " · " + row.when);
