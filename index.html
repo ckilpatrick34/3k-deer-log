@@ -150,7 +150,7 @@ a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
 <div class="wrap">
   <header class="masthead">
-    <div><p class="brand">3K Property</p><h1>Deer Log</h1><p id="gen"></p><p>Photo audit updated November 19 · November 17–18 downloaded frames</p></div>
+    <div><p class="brand">3K Property</p><h1>Deer Log</h1><p id="gen"></p><p id="photoAuditUpdated">Loading photo audit…</p></div>
     <div class="controls">
       <label for="propertyFilter">Location</label>
       <select id="propertyFilter">
@@ -162,7 +162,7 @@ a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   </header>
   <nav class="nav" aria-label="Deer Log">
     <a href="#overview">Overview</a>
-    <a href="#recentPhotos">Recent photos</a>
+    <a href="#recentPhotos">Photos</a>
     <a href="#sightings">Sightings</a>
     <a href="#buckReview">Review</a>
     <a href="#patterns">Patterns</a>
@@ -178,18 +178,15 @@ a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
       <div class="bucks" id="recentBuckRoster"></div>
     </section>
     <section class="card"><h2>Confirmed bucks</h2><div class="bucks" id="bucks"></div></section>
-    <section class="card"><h2>Buck profiles and suggested matches</h2>
-      <p class="note" id="buckReviewSummary"></p>
-      <div class="bucks" id="buckCandidates"></div>
-    </section>
+    <details class="card"><summary>Earlier profile suggestions</summary><p class="note" id="buckReviewSummary"></p><div class="bucks" id="buckCandidates"></div></details>
   </section>
   <section data-page="recentPhotos" hidden>
-    <div class="pagehead"><h2>November 17–18 photos</h2></div>
+    <div class="pagehead"><h2>Photo audit</h2></div>
     <p class="note" id="auditStatus" role="status">Loading the photo review…</p>
     <div class="sighting-tools">
-      <label>Showing<select id="auditMode"><option value="bucks">Visible racks</option><option value="assigned">Matched frames</option><option value="all">All downloaded photos</option></select></label>
+      <label>Showing<select id="auditMode"><option value="bucks">Developed racks</option><option value="assigned">Matched frames</option><option value="all">All reviewed wildlife photos</option></select></label>
       <label>Buck<select id="auditName"><option value="">All identities</option></select></label>
-      <label>Date<select id="auditDate"><option value="">Both dates</option><option value="2026-11-17">November 17</option><option value="2026-11-18">November 18</option></select></label>
+      <label>Date<select id="auditDate"><option value="">All reviewed dates</option></select></label>
     </div>
     <div class="review-toolbar"><button id="auditPrev" type="button">Previous</button><button id="auditNext" type="button">Next</button><span id="auditPosition" role="status"></span></div>
     <div id="auditGrid" class="audit-grid"></div>
@@ -930,8 +927,8 @@ $("reviewExport").onclick = () => {
   let renderVersion = 0;
   const pageSize = 24;
   const packages = new Map();
-  const assigned = buck => Boolean(buck.identity);
-  const interested = buck => buck.size_class !== "small";
+  const interested = buck => buck.size_class === "developed";
+  const assigned = buck => Boolean(buck.identity) && interested(buck);
   const propertyMatches = row => !$("propertyFilter").value ||
     row.property.toLowerCase() === $("propertyFilter").value;
 
@@ -969,10 +966,12 @@ $("reviewExport").onclick = () => {
         <h3>${esc(profile.name)}</h3>
         <p class="note">${esc(profile.camera)} · provisional identity</p>
         ${profile.possible_aliases?.length ? `<p class="note">May be the same buck as ${profile.possible_aliases.map(esc).join(", ")}.</p>` : ""}
-        <dl class="stats"><dt>Matched frames</dt><dd>${profile.frame_count}</dd>
-        <dt>Encounters</dt><dd>${profile.encounters}</dd></dl>
+        <dl class="stats"><dt>Strong photo matches</dt><dd>${profile.strong_frame_count ?? profile.frame_count}</dd>
+        <dt>Probable photo matches</dt><dd>${profile.probable_frame_count || 0}</dd>
+        <dt>Encounter groups</dt><dd>${profile.encounters}</dd></dl>
       </button>`).join("") || '<p class="note">No reviewed recent profiles for this location.</p>';
-    $("recentBuckNote").textContent = `${rows.length} provisional encounter profiles from the November 17–18 photo review. Obvious small racks are omitted. Exact scores and overlap with earlier names remain under review. Buck visits are grouped within a 30-minute gap.`;
+    const reviewedHere = audit.frames.filter(propertyMatches).length;
+    $("recentBuckNote").textContent = `${reviewedHere.toLocaleString()} wildlife photos reviewed in this location view · ${rows.length} provisional profiles. Strong and probable photo matches are shown separately. Exact scores and older-name aliases remain under review. Encounters use a 30-minute gap at each camera.`;
     $("recentBuckRoster").querySelectorAll("[data-audit-name]").forEach(button => {
       button.onclick = () => {
         $("auditName").value = button.dataset.auditName;
@@ -1001,11 +1000,11 @@ $("reviewExport").onclick = () => {
       `${start + 1}–${Math.min(start + pageSize, rows.length)} of ${rows.length} photos` : "No photos in this view.";
     $("auditPrev").disabled = auditPage === 0;
     $("auditNext").disabled = auditPage + 1 >= pages;
-    $("auditStatus").textContent = `${audit.summary.photo_count} downloaded November 17–18 photos reviewed. Older archive dates still need reconciliation. Photos with obscured antlers can remain unresolved.`;
+    $("auditStatus").textContent = `${(audit.summary.reviewed_count || audit.summary.photo_count).toLocaleString()} of ${audit.summary.archive_photo_count?.toLocaleString() || audit.summary.photo_count.toLocaleString()} archived photos reviewed. This gallery contains ${audit.summary.photo_count.toLocaleString()} wildlife photos across ${audit.summary.dates?.length || 2} dates. Identity and 120-inch qualification can remain unresolved.`;
     $("auditGrid").innerHTML = selected.map((row, index) => {
-      const observations = row.bucks.filter(interested);
+      const observations = row.bucks.filter($("auditMode").value === "all" ? buck => buck.size_class !== "small" : interested);
       const label = observations.length ? observations.map(buck =>
-        `<li><strong>${esc(buck.identity || "Identity unresolved")}</strong> · ${esc(buck.position || "")}
+        `<li><strong>${buck.identity && buck.confidence === "probable" ? "Likely " : ""}${esc(buck.identity || "Identity unresolved")}</strong> · ${esc(buck.position || "")}
           ${buck.candidate ? `<br>Possible ${esc(buck.candidate)}` : ""}
           <p class="note">${esc(buck.evidence || "")}</p></li>`).join("") :
         "<li>No clearly visible developed rack in this view.</li>";
@@ -1015,7 +1014,7 @@ $("reviewExport").onclick = () => {
         </button>
         <h3>${esc(row.camera)} · ${fmtWhen(parseWhen(row.when))}</h3>
         <p class="note">${esc(row.frame)} · ${esc(row.property)}</p>
-        ${["unusable_image", "partially_corrupted_image"].includes(row.classification) ? '<p class="note">Source photo is damaged. Identification remains unresolved.</p>' : ""}
+        ${["unusable_image", "partially_corrupted_image", "corrupt", "corrupt image"].includes(row.classification) ? '<p class="note">Source photo is damaged. Identification remains unresolved.</p>' : ""}
         <ul>${label}</ul>
       </article>`;
     }).join("");
@@ -1027,7 +1026,8 @@ $("reviewExport").onclick = () => {
       if (result.status === "fulfilled") available.set(paths[index], result.value);
     });
     selected.forEach((row, index) => {
-      const image = available.get(row.package)?.[row.frame];
+      const images = available.get(row.package);
+      const image = images?.[row.archive_path] ?? images?.[row.frame];
       const element = $("auditGrid").querySelector(`[data-audit-preview="${index}"]`);
       if (image) element.src = image;
       else element.alt = row.classification === "unusable_image" ?
@@ -1046,6 +1046,12 @@ $("reviewExport").onclick = () => {
       const response = await fetch("photo-audit.json", {cache: "no-store"});
       if (!response.ok) throw new Error("Recent photo review could not be loaded.");
       audit = await response.json();
+      $("photoAuditUpdated").textContent = "Photo audit updated " + audit.summary.reviewed_at;
+      const selectedDate = $("auditDate").value;
+      const dates = audit.summary.dates || [...new Set(audit.frames.map(row => row.when.slice(0, 10)))].sort();
+      $("auditDate").innerHTML = '<option value="">All reviewed dates</option>' + dates.map(date =>
+        `<option value="${esc(date)}">${esc(parseWhen(date + "T12:00").toLocaleDateString(undefined, {month:"long", day:"numeric"}))}</option>`).join("");
+      if (dates.includes(selectedDate)) $("auditDate").value = selectedDate;
       renderProfiles();
       if (location.hash === "#recentPhotos") await renderPhotos();
     } catch (error) {
