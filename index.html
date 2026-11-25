@@ -164,20 +164,20 @@ a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
     <a href="#overview">Overview</a>
     <a href="#recentPhotos">Photos</a>
     <a href="#sightings">Sightings</a>
-    <a href="#buckReview">Review</a>
+    
     <a href="#patterns">Patterns</a>
     <a href="#planner">Planner</a>
     <a href="#harvest">Harvest</a>
   </nav>
   <main>
   <section data-page="overview">
-    <div class="pagehead"><h2>Camera activity</h2></div>
+    <div class="pagehead"><h2>Buck activity</h2></div>
     <div class="metrics" id="overviewMetrics"></div>
     <section class="card"><h2>Recent buck profiles</h2>
       <p class="note" id="recentBuckNote">Loading the recent photo review…</p>
-      <div class="bucks" id="recentBuckRoster"></div>
+      <div class="bucks" id="recentBuckRoster"></div><h3>Latest reviewed encounters</h3><p class="note">Grouped by camera and a 30-minute gap. Probable identity links remain provisional.</p><div id="auditEncounters"></div>
     </section>
-    <section class="card"><h2>Confirmed bucks</h2><div class="bucks" id="bucks"></div></section>
+    <details class="card"><summary>Historical profiles</summary><p class="note">Earlier log estimates and names; current evidence-backed references are above.</p><div class="bucks" id="bucks"></div></details>
     <details class="card"><summary>Earlier profile suggestions</summary><p class="note" id="buckReviewSummary"></p><div class="bucks" id="buckCandidates"></div></details>
   </section>
   <section data-page="recentPhotos" hidden>
@@ -654,7 +654,7 @@ function render(){
   renderSightings(rows);
   const counts = [
     ["Historical log entries", sourceRows.filter(row => !NONDEER.has(row.kind) && inProperty(row)).length],
-    ["Confirmed buck IDs", new Set(all.filter(row => row.kind === "Buck" && row.name).map(row => row.name)).size],
+    ["Historical named IDs", new Set(all.filter(row => row.kind === "Buck" && row.name).map(row => row.name)).size],
     ["Nov 7–18 log entries", sourceRows.filter(row => !NONDEER.has(row.kind) && inProperty(row) && inPeriod(row, "recent")).length]
   ];
   $("overviewMetrics").innerHTML = counts.map(([label, value]) =>
@@ -926,6 +926,7 @@ $("reviewExport").onclick = () => {
   let auditPage = 0;
   let renderVersion = 0;
   const pageSize = 24;
+  const displayName = name => audit?.profile_names?.[name] || name;
   const packages = new Map();
   const interested = buck => buck.size_class === "developed";
   const assigned = buck => Boolean(buck.identity) && interested(buck);
@@ -959,17 +960,24 @@ $("reviewExport").onclick = () => {
   }
 
   function renderProfiles() {
-    const rows = audit.profiles.filter(propertyMatches);
+    const rows = audit.profiles.filter(propertyMatches).sort((a,b) => (b.last_seen || "").localeCompare(a.last_seen || ""));
     $("recentBuckRoster").innerHTML = rows.map(profile =>
       `<button class="buck" data-audit-name="${esc(profile.name)}">
-        <img class="pic audit-cover" src="${esc(profile.cover)}" alt="${esc(profile.name)} rack" loading="lazy">
-        <h3>${esc(profile.name)}</h3>
+        <img class="pic audit-cover" src="${esc(profile.cover)}" alt="${esc(displayName(profile.name))} rack" loading="lazy">
+        <h3>${esc(displayName(profile.name))}</h3>
         <p class="note">${esc(profile.camera)} · provisional identity</p>
-        ${profile.possible_aliases?.length ? `<p class="note">May be the same buck as ${profile.possible_aliases.map(esc).join(", ")}.</p>` : ""}
+        ${profile.possible_aliases?.length ? `<p class="note">May be the same buck as ${profile.possible_aliases.map(name => esc(displayName(name))).join(", ")}.</p>` : ""}
         <dl class="stats"><dt>Strong photo matches</dt><dd>${profile.strong_frame_count ?? profile.frame_count}</dd>
         <dt>Probable photo matches</dt><dd>${profile.probable_frame_count || 0}</dd>
         <dt>Encounter groups</dt><dd>${profile.encounters}</dd></dl>
       </button>`).join("") || '<p class="note">No reviewed recent profiles for this location.</p>';
+    const encounters = (audit.encounters || []).filter(propertyMatches).slice(0, 30);
+    if ($("auditEncounters")) {
+      $("auditEncounters").innerHTML = encounters.map(row => `<article class="card"><strong>${esc(displayName(row.identity))}</strong><p>${esc(fmtWhen(parseWhen(row.first_seen)))} · ${esc(row.camera)} · ${esc(row.property)}</p><p class="note">${row.strong_frames} strong / ${row.probable_frames} probable photos</p><button type="button" data-encounter-name="${esc(row.identity)}" data-encounter-date="${esc(row.first_seen.slice(0,10))}">View photos</button></article>`).join("");
+      $("auditEncounters").querySelectorAll("[data-encounter-name]").forEach(button => {
+        button.onclick = () => { $("auditName").value = button.dataset.encounterName; $("auditDate").value = button.dataset.encounterDate; $("auditMode").value = "assigned"; auditPage = 0; location.hash = "recentPhotos"; renderPhotos(); };
+      });
+    }
     const reviewedHere = audit.frames.filter(propertyMatches).length;
     $("recentBuckNote").textContent = `${reviewedHere.toLocaleString()} wildlife photos reviewed in this location view · ${rows.length} provisional profiles. Strong and probable photo matches are shown separately. Exact scores and older-name aliases remain under review. Encounters use a 30-minute gap at each camera.`;
     $("recentBuckRoster").querySelectorAll("[data-audit-name]").forEach(button => {
@@ -984,7 +992,7 @@ $("reviewExport").onclick = () => {
     });
     const selected = $("auditName").value;
     $("auditName").innerHTML = '<option value="">All identities</option>' +
-      rows.map(profile => `<option value="${esc(profile.name)}">${esc(profile.name)}</option>`).join("");
+      rows.map(profile => `<option value="${esc(profile.name)}">${esc(displayName(profile.name))}</option>`).join("");
     if (rows.some(profile => profile.name === selected)) $("auditName").value = selected;
   }
 
@@ -1001,10 +1009,11 @@ $("reviewExport").onclick = () => {
     $("auditPrev").disabled = auditPage === 0;
     $("auditNext").disabled = auditPage + 1 >= pages;
     $("auditStatus").textContent = `${(audit.summary.reviewed_count || audit.summary.photo_count).toLocaleString()} of ${audit.summary.archive_photo_count?.toLocaleString() || audit.summary.photo_count.toLocaleString()} archived photos reviewed. This gallery contains ${audit.summary.photo_count.toLocaleString()} wildlife photos across ${audit.summary.dates?.length || 2} dates. Identity and 120-inch qualification can remain unresolved.`;
+    if (audit.summary.archive_missing_dates?.length) $("auditStatus").textContent += " Photos are still missing for " + audit.summary.archive_missing_dates.join(", ") + ".";
     $("auditGrid").innerHTML = selected.map((row, index) => {
       const observations = row.bucks.filter($("auditMode").value === "all" ? buck => buck.size_class !== "small" : interested);
       const label = observations.length ? observations.map(buck =>
-        `<li><strong>${buck.identity && buck.confidence === "probable" ? "Likely " : ""}${esc(buck.identity || "Identity unresolved")}</strong> · ${esc(buck.position || "")}
+        `<li><strong>${buck.identity && buck.confidence === "probable" ? "Likely " : ""}${esc(buck.identity ? displayName(buck.identity) : "Identity unresolved")}</strong> · ${esc(buck.position || "")}
           ${buck.candidate ? `<br>Possible ${esc(buck.candidate)}` : ""}
           <p class="note">${esc(buck.evidence || "")}</p></li>`).join("") :
         "<li>No clearly visible developed rack in this view.</li>";
