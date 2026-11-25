@@ -163,9 +163,9 @@ a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   <nav class="nav" aria-label="Deer Log">
     <a href="#overview">Overview</a>
     <a href="#recentPhotos">Photos</a>
-    <a href="#sightings">Sightings</a>
+    <a href="#sightings">Historical log</a>
     
-    <a href="#patterns">Patterns</a>
+    <a href="#patterns">Historical patterns</a>
     <a href="#planner">Planner</a>
     <a href="#harvest">Harvest</a>
   </nav>
@@ -312,7 +312,7 @@ a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   </section>
   <section data-page="sightings" hidden>
   <section class="card">
-    <div class="pagehead"><h2>Sightings</h2></div>
+    <div class="pagehead"><h2>Historical sighting log</h2></div><p class="note">Earlier log entries are preserved here. Use Photos and the reviewed encounters on Overview for the rebuilt archive.</p>
     <div class="sighting-tools">
       <label>Deer<select id="deerFilter"><option value="">All deer</option></select></label>
       <label>Dates<select id="sightingPeriod"><option value="">All dates</option><option value="recent">Nov 7–18</option><option value="older">Before Nov 7</option></select></label>
@@ -924,6 +924,7 @@ $("reviewExport").onclick = () => {
 (() => {
   let audit = null;
   let auditPage = 0;
+  let focusedEncounter = null;
   let renderVersion = 0;
   const pageSize = 24;
   const displayName = name => audit?.profile_names?.[name] || name;
@@ -953,6 +954,7 @@ $("reviewExport").onclick = () => {
     const name = $("auditName").value;
     const date = $("auditDate").value;
     return audit.frames.filter(row => propertyMatches(row) &&
+      (!focusedEncounter || focusedEncounter.has(row.archive_path)) &&
       (!date || row.when.startsWith(date)) &&
       (!name || row.bucks.some(buck => buck.identity === name)) &&
       (mode === "all" || (mode === "assigned" ? row.bucks.some(assigned) :
@@ -973,15 +975,16 @@ $("reviewExport").onclick = () => {
       </button>`).join("") || '<p class="note">No reviewed recent profiles for this location.</p>';
     const encounters = (audit.encounters || []).filter(propertyMatches).slice(0, 30);
     if ($("auditEncounters")) {
-      $("auditEncounters").innerHTML = encounters.map(row => `<article class="card"><strong>${esc(displayName(row.identity))}</strong><p>${esc(fmtWhen(parseWhen(row.first_seen)))} · ${esc(row.camera)} · ${esc(row.property)}</p><p class="note">${row.strong_frames} strong / ${row.probable_frames} probable photos</p><button type="button" data-encounter-name="${esc(row.identity)}" data-encounter-date="${esc(row.first_seen.slice(0,10))}">View photos</button></article>`).join("");
+      $("auditEncounters").innerHTML = encounters.map((row, index) => `<article class="card"><strong>${esc(displayName(row.identity))}</strong><p>${esc(fmtWhen(parseWhen(row.first_seen)))} · ${esc(row.camera)} · ${esc(row.property)}</p><p class="note">${row.strong_frames} strong / ${row.probable_frames} probable photos</p><button type="button" data-encounter-index="${index}" data-encounter-name="${esc(row.identity)}" data-encounter-date="${esc(row.first_seen.slice(0,10))}">View photos</button></article>`).join("");
       $("auditEncounters").querySelectorAll("[data-encounter-name]").forEach(button => {
-        button.onclick = () => { $("auditName").value = button.dataset.encounterName; $("auditDate").value = button.dataset.encounterDate; $("auditMode").value = "assigned"; auditPage = 0; location.hash = "recentPhotos"; renderPhotos(); };
+        button.onclick = () => { focusedEncounter = new Set(encounters[Number(button.dataset.encounterIndex)].archive_paths); $("auditName").value = button.dataset.encounterName; $("auditDate").value = ""; $("auditMode").value = "assigned"; auditPage = 0; location.hash = "recentPhotos"; renderPhotos(); };
       });
     }
     const reviewedHere = audit.frames.filter(propertyMatches).length;
     $("recentBuckNote").textContent = `${reviewedHere.toLocaleString()} wildlife photos reviewed in this location view · ${rows.length} provisional profiles. Strong and probable photo matches are shown separately. Exact scores and older-name aliases remain under review. Encounters use a 30-minute gap at each camera.`;
     $("recentBuckRoster").querySelectorAll("[data-audit-name]").forEach(button => {
       button.onclick = () => {
+        focusedEncounter = null;
         $("auditName").value = button.dataset.auditName;
         $("auditMode").value = "assigned";
         $("auditDate").value = "";
@@ -1071,12 +1074,13 @@ $("reviewExport").onclick = () => {
 
   $("propertyFilter").addEventListener("change", () => {
     if (!audit) return;
+    focusedEncounter = null;
     auditPage = 0;
     renderProfiles();
     if (location.hash === "#recentPhotos") renderPhotos();
   });
   ["auditMode", "auditName", "auditDate"].forEach(id => {
-    $(id).onchange = () => { auditPage = 0; renderPhotos(); };
+    $(id).onchange = () => { focusedEncounter = null; auditPage = 0; renderPhotos(); };
   });
   $("auditPrev").onclick = () => { auditPage--; renderPhotos(); };
   $("auditNext").onclick = () => { auditPage++; renderPhotos(); };
