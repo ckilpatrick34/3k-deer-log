@@ -175,7 +175,7 @@ a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
     <div class="metrics" id="overviewMetrics"></div>
     <section class="card"><h2>Recent buck profiles</h2>
       <p class="note" id="recentBuckNote">Loading the recent photo review…</p>
-    <p class="note">November 21–26 Reveal intake: 899 distinct photos downloaded and screened for wildlife. Visual review and gallery publication are pending. Full coverage for the week is still being reconciled.</p>
+    <p class="note">November 21–26 Reveal intake: 1,192 distinct photos downloaded. See Photos for camera coverage and published review counts.</p>
       <div class="bucks" id="recentBuckRoster"></div><h3>Latest reviewed encounters</h3><p class="note">Grouped by camera and a 30-minute gap. Probable identity links remain provisional.</p><div id="auditEncounters"></div>
     </section>
     <details class="card"><summary>Historical profiles</summary><p class="note">Earlier log estimates and names; current evidence-backed references are above.</p><div class="bucks" id="bucks"></div></details>
@@ -183,8 +183,30 @@ a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   </section>
   <section data-page="recentPhotos" hidden>
     <div class="pagehead"><h2>Photo audit</h2></div>
+    <section class="card" aria-labelledby="revealCoverageTitle">
+      <h3 id="revealCoverageTitle">Reveal photo coverage · November 21–26</h3>
+      <p class="note">Each cell shows verified new downloads / photos in the published review gallery. These are different sets. New downloads still need visual review, and zero downloads does not indicate an empty camera.</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th scope="col">Camera</th><th scope="col">Nov 21</th><th scope="col">Nov 22</th><th scope="col">Nov 23</th><th scope="col">Nov 24</th><th scope="col">Nov 25</th><th scope="col">Nov 26</th></tr></thead>
+          <tbody>
+          <tr><th scope="row">Cdub</th><td>140 / 0</td><td>72 / 0</td><td>0 / 0</td><td>74 / 8</td><td>106 / 0</td><td>1 / 0</td></tr>
+          <tr><th scope="row">Coyote</th><td>0 / 0</td><td>0 / 0</td><td>101 / 0</td><td>0 / 213</td><td>0 / 0</td><td>0 / 0</td></tr>
+          <tr><th scope="row">Grain Bin</th><td>0 / 0</td><td>19 / 0</td><td>43 / 0</td><td>39 / 68</td><td>22 / 0</td><td>0 / 0</td></tr>
+          <tr><th scope="row">Hog stand</th><td>8 / 0</td><td>2 / 0</td><td>23 / 0</td><td>50 / 50</td><td>76 / 0</td><td>46 / 0</td></tr>
+          <tr><th scope="row">SOR</th><td>0 / 0</td><td>0 / 0</td><td>83 / 0</td><td>0 / 82</td><td>0 / 0</td><td>2 / 0</td></tr>
+          <tr><th scope="row">Starkville</th><td>9 / 0</td><td>50 / 0</td><td>49 / 0</td><td>37 / 41</td><td>102 / 0</td><td>38 / 0</td></tr>
+          </tbody>
+          <tfoot>
+            <tr><th scope="row">Total downloaded / published</th><td>157 / 0</td><td>143 / 0</td><td>299 / 0</td><td>200 / 462</td><td>306 / 0</td><td>87 / 0</td></tr>
+            <tr><th scope="row">Reveal results observed</th><td>Unverified</td><td>Unverified</td><td>Unverified</td><td>Unverified</td><td>306</td><td>87</td></tr>
+          </tfoot>
+        </table>
+      </div>
+      <p class="note">November 26 is a snapshot of the camera feed at export time. Buck identities are kept provisional until clear rack views support a match.</p>
+    </section>
     <p class="note" id="auditStatus" role="status">Loading the photo review…</p>
-    <p class="note">November 21–26 Reveal intake: 899 distinct photos downloaded and screened for wildlife. Visual review and gallery publication are pending. Full coverage for the week is still being reconciled.</p>
+    <p class="note">November 21–26 Reveal intake: 1,192 distinct photos downloaded. See Photos for camera coverage and published review counts.</p>
     <div class="sighting-tools">
       <label>Showing<select id="auditMode"><option value="bucks">Developed racks</option><option value="assigned">Matched frames</option><option value="all">All reviewed wildlife photos</option></select></label>
       <label>Buck<select id="auditName"><option value="">All identities</option></select></label>
